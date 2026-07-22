@@ -16,6 +16,7 @@
 - [x] Neon Postgres через Vercel Marketplace, env-и в проєкті
 - [x] Drizzle + drizzle-kit: конфіг, перша міграція, npm-скрипти (`db:generate`, `db:migrate`, `db:studio`)
 - [x] Better Auth: email+password + Google OAuth, таблиці в нашій БД, ролі `user|admin`
+- [x] Auth UI: сторінка `/auth` (вхід/реєстрація, Google опційно через `NEXT_PUBLIC_AUTH_GOOGLE`), кнопка акаунта/виходу в хедері
 - [x] Базовий layout: `100dvh` app-shell, safe-area, next-intl (EN)
 - [x] PWA: manifest + іконка
 - [ ] PWA: service worker (кеш shell + зіграних колод)
@@ -44,7 +45,9 @@
 - [x] Типи `ChoiceCard`/`DeckEntity`/`BuildChoiceOptions` (`src/lib/deck/types.ts`)
 - [x] Server-side `buildChoiceDeck(seed)`: seeded RNG (mulberry32), дистрактори-сусіди за складністю, ramp легкі→складні (`src/lib/deck/build.ts`)
 - [x] **Правило мультизначності**: `answerKeys` — дистрактор не може ділити жоден ключ відповіді з питанням
-- [x] Механіка `choice` (демо: прапор → 4 назви; emoji-фолбек якщо картинка не вантажиться)
+- [x] Механіка `choice` з ДВОМА лейаутами: **duel** (пара гральних карт «в руці», нахилені з перекриттям; тач → свайп у бік відповіді, миша → hover+клік) і **quad** (промпт + 2×2 тапи); emoji-фолбек картинок
+- [x] Лейаут — **глобальне налаштування юзера** (zustand persist у localStorage, перемикач ⚔️/🎯 в хедері гри; міграція в акаунт — етап 2), одна гра = кілька відображень
+- [x] Input-aware ввід: `(pointer: coarse)` → drag-шар, інакше клік/hover/клавіші
 - [ ] Підключити choice-ігри до БД (замість семплу) — всі 5 стартових
 - [ ] `swipe-binary`: motion drag, пороги, fling, стек карток
 - [ ] `higher-lower`

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserButton } from "@/components/auth/user-button";
 
 export default function Home() {
   const t = useTranslations();
@@ -11,7 +12,10 @@ export default function Home() {
         <span className="font-display text-lg font-semibold tracking-tight">
           {t("app.name")}
         </span>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <UserButton />
+          <ThemeToggle />
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center">

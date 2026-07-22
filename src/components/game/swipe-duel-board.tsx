@@ -6,34 +6,32 @@ import {
   motion,
   useMotionValue,
   useTransform,
+  type MotionValue,
 } from "motion/react";
 import { useTranslations } from "next-intl";
 import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
+import { useCoarsePointer } from "@/lib/use-coarse-pointer";
 import { ResultScreen, StatusBar, StreakBadge } from "./hud";
 import { useGameSession } from "./use-game-session";
 
-const SWIPE_THRESHOLD = 70;
+const SWIPE_THRESHOLD = 80;
 
 interface Props {
   title: string;
-  /** Cards built with optionCount: 2 — prompt on top, two option cards below. */
+  /** Cards built with optionCount: 2 — prompt on top, a pair of cards "in hand". */
   cards: ChoiceCard[];
 }
 
 /**
- * Duel layout of the `choice` mechanic — THE flagship feel:
- * question on top ("Germany"), two cards center-stage, fling the stage
- * left/right toward the correct one (tap also works). Keyboard: ← →.
+ * Duel layout of `choice` — a pair of playing cards held in hand (tilted,
+ * slightly overlapping). Touch devices: fling the pair toward the answer.
+ * Mouse: hover lifts a card, click picks it. Keyboard: ← →.
  */
 export function SwipeDuelBoard({ title, cards }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length);
+  const touch = useCoarsePointer();
   const x = useMotionValue(0);
-
-  const leftScale = useTransform(x, [-SWIPE_THRESHOLD, 0], [1.07, 1]);
-  const rightScale = useTransform(x, [0, SWIPE_THRESHOLD], [1, 1.07]);
-  const leftGlow = useTransform(x, [-SWIPE_THRESHOLD, 0], [1, 0]);
-  const rightGlow = useTransform(x, [0, SWIPE_THRESHOLD], [0, 1]);
 
   const card = cards[s.idx];
   if (s.done || !card) {
@@ -84,44 +82,43 @@ export function SwipeDuelBoard({ title, cards }: Props) {
                 {t("readMore")}
               </a>
             ) : (
-              <span className="text-xs text-muted">{t("duelHint")}</span>
+              <span className="text-xs text-muted">
+                {touch ? t("duelHintTouch") : t("duelHintMouse")}
+              </span>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* duel stage */}
+      {/* the hand: two tilted, slightly overlapping playing cards */}
       <div className="relative min-h-0 flex-1 select-none">
         <AnimatePresence mode="wait">
           <motion.div
             key={card.id}
-            initial={{ opacity: 0, scale: 0.94 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.94 }}
-            transition={{ duration: 0.18 }}
-            className="absolute inset-0 grid grid-cols-2 gap-3"
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -30 }}
+            transition={{ duration: 0.2 }}
+            className="flex h-full items-center justify-center"
           >
             {card.options.map((o, i) => (
-              <motion.div
+              <HandCard
                 key={o.key}
-                style={{ scale: i === 0 ? leftScale : rightScale }}
-                className="h-full"
-              >
-                <OptionCard
-                  option={o}
-                  picked={s.picked}
-                  correctKey={card.correctKey}
-                  onTap={() => pick(o)}
-                />
-              </motion.div>
+                option={o}
+                side={i === 0 ? "left" : "right"}
+                x={touch ? x : null}
+                picked={s.picked}
+                correctKey={card.correctKey}
+                onPick={() => pick(o)}
+              />
             ))}
           </motion.div>
         </AnimatePresence>
 
-        {/* drag layer (fling anywhere on the stage) */}
-        {!s.picked && (
+        {/* touch-only drag layer: fling anywhere on the stage */}
+        {touch && !s.picked && (
           <motion.div
-            className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing"
+            className="absolute inset-0 z-20"
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.5}
@@ -129,20 +126,6 @@ export function SwipeDuelBoard({ title, cards }: Props) {
             onDragEnd={onDragEnd}
           />
         )}
-
-        {/* direction hints */}
-        <motion.span
-          style={{ opacity: leftGlow }}
-          className="pointer-events-none absolute left-2 top-1/2 z-20 -translate-y-1/2 text-3xl text-accent"
-        >
-          ◀
-        </motion.span>
-        <motion.span
-          style={{ opacity: rightGlow }}
-          className="pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 text-3xl text-accent"
-        >
-          ▶
-        </motion.span>
       </div>
 
       <StreakBadge streak={s.streak} />
@@ -150,18 +133,34 @@ export function SwipeDuelBoard({ title, cards }: Props) {
   );
 }
 
-function OptionCard({
+/** One playing card in the hand: base tilt; drag/hover straightens and lifts it. */
+function HandCard({
   option,
+  side,
+  x,
   picked,
   correctKey,
-  onTap,
+  onPick,
 }: {
   option: ChoiceOption;
+  side: "left" | "right";
+  /** MotionValue while touch-dragging, null on mouse devices. */
+  x: MotionValue<number> | null;
   picked: string | null;
   correctKey: string;
-  onTap: () => void;
+  onPick: () => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const left = side === "left";
+  const baseRotate = left ? -8 : 8;
+
+  // Touch: transforms driven by the drag position
+  const zero = useMotionValue(0);
+  const range = left ? [-SWIPE_THRESHOLD, 0] : [0, SWIPE_THRESHOLD];
+  const rotate = useTransform(x ?? zero, range, left ? [0, baseRotate] : [baseRotate, 0]);
+  const y = useTransform(x ?? zero, range, left ? [-16, 10] : [10, -16]);
+  const scale = useTransform(x ?? zero, range, left ? [1.06, 1] : [1, 1.06]);
+
   const isCorrect = option.key === correctKey;
   const state = !picked
     ? "idle"
@@ -172,10 +171,18 @@ function OptionCard({
         : "dim";
 
   return (
-    <button
-      onClick={onTap}
+    <motion.button
+      onClick={onPick}
       disabled={!!picked}
-      className={`glass-card flex h-full w-full flex-col items-center justify-center gap-2 p-4 transition-all active:scale-95 ${
+      style={
+        x
+          ? { rotate, y, scale, transformOrigin: "bottom center" }
+          : { rotate: baseRotate, transformOrigin: "bottom center" }
+      }
+      whileHover={!x ? { rotate: 0, y: -14, scale: 1.05, zIndex: 10 } : undefined}
+      className={`glass-card relative aspect-[5/7] w-[44%] max-w-52 p-3 shadow-xl transition-colors ${
+        left ? "-mr-4 z-[1]" : "-ml-4"
+      } ${
         state === "correct"
           ? "border-success shadow-glow"
           : state === "wrong"
@@ -185,18 +192,30 @@ function OptionCard({
               : ""
       }`}
     >
-      {option.image && !imgFailed ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ emoji fallback
-        <img
-          src={option.image}
-          alt=""
-          onError={() => setImgFailed(true)}
-          className="max-h-[70%] max-w-full rounded-md object-contain drop-shadow-lg"
-        />
-      ) : option.emoji ? (
-        <span className="text-7xl">{option.emoji}</span>
-      ) : null}
-      {option.label && <span className="text-sm font-semibold">{option.label}</span>}
-    </button>
+      {/* playing-card corner pips */}
+      <span className="absolute left-2.5 top-2 font-display text-xs font-bold text-muted">
+        {left ? "A" : "B"}
+      </span>
+      <span className="absolute bottom-2 right-2.5 rotate-180 font-display text-xs font-bold text-muted">
+        {left ? "A" : "B"}
+      </span>
+
+      <span className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-lg border border-line/60 p-2">
+        {option.image && !imgFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ emoji fallback
+          <img
+            src={option.image}
+            alt=""
+            onError={() => setImgFailed(true)}
+            className="max-h-[70%] max-w-full rounded-md object-contain drop-shadow-lg"
+          />
+        ) : option.emoji ? (
+          <span className="text-6xl">{option.emoji}</span>
+        ) : null}
+        {option.label && (
+          <span className="text-center text-sm font-semibold leading-tight">{option.label}</span>
+        )}
+      </span>
+    </motion.button>
   );
 }
