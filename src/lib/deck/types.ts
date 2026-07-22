@@ -14,6 +14,8 @@ export interface ChoiceOption {
   key: string;
   label?: string;
   image?: string;
+  /** Offline/hotlink-failure fallback (e.g. flag emoji). */
+  emoji?: string;
 }
 
 /** One playable card. `payload` shape is mechanic-specific; this is `choice`. */

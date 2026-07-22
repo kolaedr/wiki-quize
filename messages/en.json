@@ -12,6 +12,13 @@
   },
   "game": {
     "flagsTitle": "Flags of the World",
+    "chooseMode": "Pick a game style",
+    "flagship": "flagship",
+    "duelTitle": "Duel — swipe",
+    "duelDesc": "Country on top, two flags below. Fling toward the right one.",
+    "quadTitle": "Classic — 4 options",
+    "quadDesc": "A flag and four country names. Tap the right one.",
+    "duelHint": "swipe or tap the correct card",
     "result": "Deck finished",
     "bestStreak": "Best streak",
     "streak": "streak",

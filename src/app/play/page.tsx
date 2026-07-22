@@ -1,31 +1,25 @@
 import Link from "next/link";
-import { getLocale, getTranslations } from "next-intl/server";
-import { GameBoard } from "@/components/game/game-board";
-import { SAMPLE_COUNTRIES } from "@/data/sample-countries";
-import { buildChoiceDeck } from "@/lib/deck/build";
-import type { DeckEntity } from "@/lib/deck/types";
+import { getTranslations } from "next-intl/server";
 
-export const dynamic = "force-dynamic"; // deck varies per day
-
-/**
- * Demo deck: "Flags of the World" over the bundled sample (works before the
- * DB is populated). Once import runs, this page switches to topic_entities.
- */
+/** Mini-catalog of demo game variants (layouts of the `choice` mechanic). */
 export default async function PlayPage() {
-  const locale = await getLocale();
   const t = await getTranslations();
 
-  const today = new Date().toISOString().slice(0, 10);
-  const cards = buildChoiceDeck(SAMPLE_COUNTRIES, {
-    seed: `flags-demo-${today}`,
-    locale,
-    deckSize: 10,
-    prompt: (e: DeckEntity) => ({
-      image: e.imageUrl ?? undefined,
-      emoji: (e.values.flagEmoji as string) ?? undefined,
-    }),
-    option: (e: DeckEntity) => ({ label: e.labels[locale] ?? e.labels.en }),
-  });
+  const modes = [
+    {
+      href: "/play/duel",
+      emoji: "⚔️",
+      title: t("game.duelTitle"),
+      desc: t("game.duelDesc"),
+      badge: t("game.flagship"),
+    },
+    {
+      href: "/play/quad",
+      emoji: "🎯",
+      title: t("game.quadTitle"),
+      desc: t("game.quadDesc"),
+    },
+  ];
 
   return (
     <>
@@ -35,7 +29,29 @@ export default async function PlayPage() {
         </Link>
         <span className="glass-card px-3 py-1 text-xs text-muted">demo</span>
       </header>
-      <GameBoard title={t("game.flagsTitle")} cards={cards} />
+      <main className="flex flex-1 flex-col justify-center gap-4 px-5">
+        <h1 className="font-display px-1 text-2xl font-bold">{t("game.chooseMode")}</h1>
+        {modes.map((m) => (
+          <Link
+            key={m.href}
+            href={m.href}
+            className="glass-card flex items-center gap-4 p-5 transition-all hover:border-accent active:scale-[0.98]"
+          >
+            <span className="text-4xl">{m.emoji}</span>
+            <span className="flex flex-col gap-0.5">
+              <span className="flex items-center gap-2 font-semibold">
+                {m.title}
+                {m.badge && (
+                  <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
+                    {m.badge}
+                  </span>
+                )}
+              </span>
+              <span className="text-sm text-muted">{m.desc}</span>
+            </span>
+          </Link>
+        ))}
+      </main>
     </>
   );
 }
