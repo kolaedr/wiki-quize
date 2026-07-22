@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChevronRight, Play, Shield } from "lucide-react";
+import { ChevronRight, Globe2, Play, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserButton } from "@/components/auth/user-button";
+import { GameIcon } from "@/components/game-icon";
 import { resolveText } from "@/i18n/locales";
 import { getAdminSession } from "@/lib/admin/guard";
 import { listPublishedGames } from "@/lib/deck/from-db";
@@ -59,9 +60,7 @@ export default async function Home() {
                 href={`/play/${g.slug}`}
                 className="glass-card flex items-center gap-4 p-4 transition-all hover:border-accent active:scale-[0.99]"
               >
-                <span className="text-3xl">
-                  {((g.style as { emoji?: string })?.emoji as string) ?? "🃏"}
-                </span>
+                <GameIcon name={(g.style as { icon?: string })?.icon} />
                 <span className="flex flex-1 flex-col">
                   <span className="font-semibold">{resolveText(g.title, locale)}</span>
                   <span className="text-xs text-muted">
@@ -79,7 +78,7 @@ export default async function Home() {
               <div className="glass-card absolute inset-0 -rotate-6 translate-y-3 opacity-40" />
               <div className="glass-card absolute inset-0 rotate-3 translate-y-1.5 opacity-70" />
               <div className="glass-card shadow-glow absolute inset-0 flex items-center justify-center">
-                <span className="text-4xl">🌍</span>
+                <Globe2 size={40} className="text-accent" />
               </div>
             </div>
             <Link

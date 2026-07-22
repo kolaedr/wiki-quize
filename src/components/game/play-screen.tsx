@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, Swords, LayoutGrid } from "lucide-react";
+import { ChevronLeft, Square, Swords, LayoutGrid } from "lucide-react";
 import type { BinaryCard, ChoiceCard } from "@/lib/deck/types";
 import { useProgress } from "@/stores/progress";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
@@ -67,12 +67,18 @@ export function PlayScreen({
     [gameId, seed, slug, level, markCompleted, recordScore],
   );
 
-  const active: ChoiceLayout = mounted ? layout : "duel";
+  let active: ChoiceLayout = mounted ? layout : "duel";
+  // graceful fallback if the chosen layout has no cards for this game
+  if (active === "single" && binaryCards.length === 0) active = "duel";
+  if (active === "duel" && duelCards.length === 0 && quadCards.length > 0) active = "quad";
+
   const showLayoutSwitch = mechanic === "choice" && quadCards.length > 0;
 
   let board: React.ReactNode;
-  if (mechanic === "swipe_binary") {
-    board = <SwipeBinaryBoard title={title} cards={binaryCards} onFinish={onFinish} />;
+  if (mechanic === "swipe_binary" || (mechanic === "choice" && active === "single")) {
+    board = (
+      <SwipeBinaryBoard key="single" title={title} cards={binaryCards} onFinish={onFinish} />
+    );
   } else if (mechanic === "higher_lower" || active === "duel") {
     board = <SwipeDuelBoard key="duel" title={title} cards={duelCards} onFinish={onFinish} />;
   } else {
@@ -97,6 +103,7 @@ export function PlayScreen({
           >
             {(
               [
+                ["single", Square],
                 ["duel", Swords],
                 ["quad", LayoutGrid],
               ] as const

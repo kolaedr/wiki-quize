@@ -285,3 +285,126 @@ export function buildBinaryDeck(
   }
   return cards;
 }
+
+/**
+ * SINGLE layout of a choice game (own image attribute): one card at a time —
+ * statement "This is the {role} of {name}" + the image; swipe right = true,
+ * left = false. Falsehoods show a difficulty-neighbor's image instead
+ * (answer-key rule applies, so a "false" image is never also correct).
+ */
+export function buildSingleAttrDeck(
+  entities: DeckEntity[],
+  opts: {
+    seed: string;
+    locale: string;
+    imageRole: string;
+    tmpl: string;
+    deckSize?: number;
+    emojiRole?: string;
+    questions?: DeckEntity[];
+    answerKeys?: (e: DeckEntity) => string[];
+  },
+): BinaryCard[] {
+  const { seed, locale, imageRole, tmpl, deckSize = 10 } = opts;
+  const answerKeys = opts.answerKeys ?? ((e: DeckEntity) => [e.qid]);
+  const rnd = rngFromSeed(seed);
+
+  const img = (e: DeckEntity) => e.values[imageRole] as string | undefined;
+  const pool = entities.filter((e) => img(e));
+  const base = (opts.questions?.length ? opts.questions : pool).filter((e) => img(e));
+  if (pool.length < 2) return [];
+
+  const label = (e: DeckEntity) => e.labels[locale] ?? e.labels.en ?? e.qid;
+  const cards: BinaryCard[] = [];
+
+  for (const q of shuffle(base, rnd).slice(0, deckSize)) {
+    const isTrue = rnd() < 0.5;
+    let shown = q;
+    if (!isTrue) {
+      const qKeys = new Set(answerKeys(q));
+      const qd = q.difficultyScore ?? 0.5;
+      const candidates = pool
+        .filter((e) => e.qid !== q.qid && !answerKeys(e).some((k) => qKeys.has(k)))
+        .sort(
+          (a, b) =>
+            Math.abs((a.difficultyScore ?? 0.5) - qd) -
+            Math.abs((b.difficultyScore ?? 0.5) - qd),
+        )
+        .slice(0, 6);
+      if (candidates.length === 0) continue;
+      shown = candidates[Math.floor(rnd() * candidates.length)];
+    }
+
+    cards.push({
+      id: `${q.qid}-${cards.length}`,
+      mechanic: "binary",
+      tmpl,
+      params: { a: label(q) },
+      image: img(shown),
+      emoji: opts.emojiRole ? (shown.values[opts.emojiRole] as string | undefined) : undefined,
+      isTrue,
+      explain: { wikiUrl: q.wikiLinks?.[locale] ?? q.wikiLinks?.en ?? undefined },
+    });
+  }
+  return cards;
+}
+
+/**
+ * SINGLE layout of a relation game: statement "{ref} … {entity}" (e.g.
+ * "Ferrari is from Italy") + optional prompt image; swipe true/false.
+ * False statements pick a ref NOT belonging to the entity.
+ */
+export function buildSingleRefDeck(
+  entities: DeckEntity[],
+  opts: {
+    seed: string;
+    locale: string;
+    refRole: string;
+    tmpl: string;
+    promptImageRole?: string;
+    deckSize?: number;
+    questions?: DeckEntity[];
+  },
+): BinaryCard[] {
+  const { seed, locale, refRole, tmpl, deckSize = 10 } = opts;
+  const rnd = rngFromSeed(seed);
+
+  const pool = entities.filter((e) => refsOf(e, refRole).length > 0);
+  if (pool.length < 2) return [];
+  const allRefs = new Map<string, EntityRef>();
+  for (const e of pool) for (const r of refsOf(e, refRole)) allRefs.set(r.qid, r);
+
+  const label = (e: DeckEntity) => e.labels[locale] ?? e.labels.en ?? e.qid;
+  const refLabel = (r: EntityRef) => r.labels[locale] ?? r.labels.en ?? r.qid;
+  const base = (opts.questions?.length ? opts.questions : pool).filter(
+    (e) => refsOf(e, refRole).length > 0,
+  );
+
+  const cards: BinaryCard[] = [];
+  for (const q of shuffle(base, rnd).slice(0, deckSize)) {
+    const own = refsOf(q, refRole);
+    const ownQids = new Set(own.map((r) => r.qid));
+    const isTrue = rnd() < 0.5;
+    let ref: EntityRef | undefined;
+    if (isTrue) {
+      ref = own[Math.floor(rnd() * own.length)];
+    } else {
+      const others = [...allRefs.values()].filter((r) => !ownQids.has(r.qid));
+      ref = others[Math.floor(rnd() * others.length)];
+    }
+    if (!ref) continue;
+
+    cards.push({
+      id: `${q.qid}-${cards.length}`,
+      mechanic: "binary",
+      tmpl,
+      params: { a: label(q), b: refLabel(ref) },
+      image: opts.promptImageRole
+        ? ((q.values[opts.promptImageRole] as string | undefined) ?? undefined)
+        : undefined,
+      isTrue,
+      explain: { wikiUrl: q.wikiLinks?.[locale] ?? q.wikiLinks?.en ?? undefined },
+    });
+  }
+  return cards;
+}

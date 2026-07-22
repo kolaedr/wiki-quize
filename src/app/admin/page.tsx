@@ -12,6 +12,7 @@ import {
 import { getAdminSession } from "@/lib/admin/guard";
 import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
+import { GameIcon } from "@/components/game-icon";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // imports run inside server actions
@@ -101,15 +102,15 @@ export default async function AdminPage() {
             const cfg = (g.config ?? {}) as { levels?: number; perLevel?: number };
             return (
               <div key={g.id} className="glass-card flex items-center justify-between gap-3 p-4">
-                <div>
-                  <p className="font-semibold">
-                    {((g.style as { emoji?: string })?.emoji ?? "🃏") + " "}
-                    {resolveText(g.title, "uk")}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <GameIcon name={(g.style as { icon?: string })?.icon} size={20} className="h-9 w-9" />
+                  <div>
+                  <p className="font-semibold">{resolveText(g.title, "uk")}</p>
                   <p className="text-xs text-muted">
                     {g.status} · рівнів: {cfg.levels ?? 1} (по {cfg.perLevel ?? 20}) · зіграно:{" "}
                     {g.playsCount}
                   </p>
+                  </div>
                 </div>
                 <ActionButton
                   variant="ghost"

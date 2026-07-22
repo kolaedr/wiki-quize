@@ -42,7 +42,9 @@ export interface BinaryCard {
   /** i18n template key under game.tmpl.* */
   tmpl: string;
   params: Record<string, string | number>;
+  /** Optional visual (single-layout choice games show the questioned image). */
   image?: string;
+  emoji?: string;
   isTrue: boolean;
   explain: { wikiUrl?: string };
 }

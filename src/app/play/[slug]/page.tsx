@@ -27,7 +27,7 @@ export default async function GameLevelsPage({
     <LevelMap
       slug={meta.slug}
       title={resolveText(meta.title, locale)}
-      emoji={meta.style.emoji}
+      icon={(meta.style as { icon?: string }).icon}
       levels={meta.config.levels}
     />
   );

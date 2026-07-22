@@ -6,8 +6,9 @@ import {
   useMotionValue,
   useTransform,
 } from "motion/react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Check, X } from "lucide-react";
+import { Check, ImageOff, X } from "lucide-react";
 import type { BinaryCard } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
 import { ResultScreen, StatusBar, StreakBadge } from "./hud";
@@ -31,6 +32,8 @@ export function SwipeBinaryBoard({ title, cards, onFinish }: Props) {
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
   const x = useMotionValue(0);
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => setImgFailed(false), [s.idx]);
 
   const rotate = useTransform(x, [-160, 160], [-10, 10]);
   const trueOpacity = useTransform(x, [20, SWIPE_THRESHOLD], [0, 1]);
@@ -97,6 +100,21 @@ export function SwipeBinaryBoard({ title, cards, onFinish }: Props) {
               answered ? (wasCorrect ? "border-success shadow-glow" : "border-danger") : ""
             } ${touch ? "cursor-grab active:cursor-grabbing" : ""}`}
           >
+            {card.image && !imgFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ fallback
+              <img
+                src={card.image}
+                alt=""
+                onError={() => setImgFailed(true)}
+                className="max-h-[45%] max-w-[80%] rounded-lg object-contain drop-shadow-lg"
+              />
+            ) : card.image && imgFailed ? (
+              card.emoji ? (
+                <span className="text-7xl">{card.emoji}</span>
+              ) : (
+                <ImageOff size={44} className="text-muted opacity-50" />
+              )
+            ) : null}
             <p className="font-display text-xl font-bold leading-8">
               {t(`tmpl.${card.tmpl}`, card.params)}
             </p>

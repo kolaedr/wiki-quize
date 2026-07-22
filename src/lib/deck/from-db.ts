@@ -7,6 +7,8 @@ import {
   buildChoiceDeck,
   buildHigherLowerDeck,
   buildRefChoiceDeck,
+  buildSingleAttrDeck,
+  buildSingleRefDeck,
 } from "./build";
 import type { BinaryCard, ChoiceCard, DeckEntity } from "./types";
 
@@ -27,6 +29,10 @@ export interface GameConfig {
   imageRole?: string;
   /** swipe_binary */
   roles?: { role: string; tmpl: string }[];
+  /** choice: template for the SINGLE (true/false) layout, e.g. "isFlag", "langOf" */
+  singleTmpl?: string;
+  /** choice: emoji-content fallback role for broken images (e.g. flagEmoji) */
+  emojiRole?: string;
 }
 
 export interface GameMeta {
@@ -59,6 +65,8 @@ function parseConfig(raw: unknown): GameConfig {
     tmpl: c.tmpl,
     imageRole: c.imageRole,
     roles: c.roles,
+    singleTmpl: c.singleTmpl,
+    emojiRole: c.emojiRole,
   };
 }
 
@@ -162,6 +170,15 @@ export async function loadGameDecks(
       optionCount: 4,
       promptImageRole: cfg.promptImageRole,
     });
+    if (cfg.singleTmpl) {
+      result.binaryCards = buildSingleRefDeck(entities, {
+        ...base,
+        seed: `${slug}-L${lvl}-single-${seed}`,
+        refRole: cfg.refRole,
+        tmpl: cfg.singleTmpl,
+        promptImageRole: cfg.promptImageRole,
+      });
+    }
     return result;
   }
 
@@ -188,6 +205,16 @@ export async function loadGameDecks(
     prompt: (e) => ({ image: image(e) }),
     option: (e) => ({ label: label(e) }),
   });
+  if (cfg.singleTmpl) {
+    result.binaryCards = buildSingleAttrDeck(withRole, {
+      ...base,
+      questions: qWithRole,
+      seed: `${slug}-L${lvl}-single-${seed}`,
+      imageRole: role,
+      tmpl: cfg.singleTmpl,
+      emojiRole: cfg.emojiRole,
+    });
+  }
   return result;
 }
 

@@ -7,8 +7,12 @@ import { persist } from "zustand/middleware";
  * Global user preferences (guest: localStorage; after sign-in they will
  * migrate to the account — stage 2). One game — several presentation
  * layouts; the layout is a user setting, not a separate game.
+ *
+ * single — one card, swipe right = true / left = false
+ * duel   — a pair of cards, fling toward the answer
+ * quad   — four options, tap
  */
-export type ChoiceLayout = "duel" | "quad";
+export type ChoiceLayout = "single" | "duel" | "quad";
 
 interface SettingsState {
   layout: ChoiceLayout;

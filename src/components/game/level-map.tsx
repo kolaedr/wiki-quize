@@ -4,17 +4,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Check, ChevronLeft, Lock, Star } from "lucide-react";
+import { GameIcon } from "@/components/game-icon";
 import { useProgress } from "@/stores/progress";
 
 interface Props {
   slug: string;
   title: string;
-  emoji?: string;
+  icon?: string;
   levels: number;
 }
 
 /** Game-pass style level map: level N unlocks after completing N-1. */
-export function LevelMap({ slug, title, emoji, levels }: Props) {
+export function LevelMap({ slug, title, icon, levels }: Props) {
   const t = useTranslations();
   const progress = useProgress();
   const [mounted, setMounted] = useState(false);
@@ -34,7 +35,7 @@ export function LevelMap({ slug, title, emoji, levels }: Props) {
 
       <main className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
         <div className="flex items-center gap-3">
-          <span className="text-4xl">{emoji ?? "🃏"}</span>
+          <GameIcon name={icon} size={28} />
           <div>
             <h1 className="font-display text-2xl font-bold">{title}</h1>
             <p className="text-sm text-muted">{t("levels.subtitle", { levels })}</p>

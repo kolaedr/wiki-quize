@@ -137,7 +137,9 @@ export const countryRef = (x: SeedCountry): Ref => ({
 export interface SeedBrand {
   qid: string;
   name: string;
-  logoFile: string;
+  /** Commons filename candidates — the seed script picks the FIRST that
+   * actually resolves (URL availability check), so no broken logos. */
+  logoCandidates: string[];
   origin: SeedCountry;
   inception: number;
   wikiEn: string;
@@ -149,14 +151,14 @@ const CO = (qid: string) => byQid.get(qid)!;
 const b = (
   qid: string,
   name: string,
-  logoFile: string,
+  logoCandidates: string[],
   originQid: string,
   inception: number,
   wikiSlug?: string,
 ): SeedBrand => ({
   qid,
   name,
-  logoFile,
+  logoCandidates,
   origin: CO(originQid),
   inception,
   wikiEn: `https://en.wikipedia.org/wiki/${(wikiSlug ?? name).replaceAll(" ", "_")}`,
@@ -164,32 +166,33 @@ const b = (
 
 /** Ordered famous → less famous. */
 export const BRANDS: SeedBrand[] = [
-  b("Q53268", "Toyota", "Toyota carlogo.svg", "Q17", 1937),
-  b("Q26678", "BMW", "BMW.svg", "Q183", 1916),
-  b("Q36008", "Mercedes-Benz", "Mercedes-Logo.svg", "Q183", 1926),
-  b("Q246", "Volkswagen", "Volkswagen logo 2019.svg", "Q183", 1937),
-  b("Q44294", "Ford", "Ford logo flat.svg", "Q30", 1903, "Ford_Motor_Company"),
-  b("Q23317", "Audi", "Audi-Logo 2016.svg", "Q183", 1909),
-  b("Q9584", "Honda", "Honda Logo.svg", "Q17", 1948),
-  b("Q478214", "Tesla", "Tesla Motors.svg", "Q30", 2003, "Tesla,_Inc."),
-  b("Q27586", "Ferrari", "Ferrari-Logo.svg", "Q38", 1939),
-  b("Q40993", "Porsche", "Porsche logo.svg", "Q183", 1931),
-  b("Q20165", "Nissan", "Nissan 2020 logo.svg", "Q17", 1933),
-  b("Q29570", "Chevrolet", "Chevrolet logo.svg", "Q30", 1911),
-  b("Q6686", "Renault", "Renault 2021 Text.svg", "Q142", 1899),
-  b("Q35886", "Lamborghini", "Lamborghini Logo.svg", "Q38", 1963),
-  b("Q6742", "Peugeot", "Peugeot Logo.svg", "Q142", 1810),
-  b("Q55931", "Hyundai", "Hyundai Motor Company logo.svg", "Q884", 1967, "Hyundai_Motor_Company"),
-  b("Q35996", "Mazda", "Mazda logo with emblem.svg", "Q17", 1920),
-  b("Q181642", "Suzuki", "Suzuki logo 2.svg", "Q17", 1909),
-  b("Q35349", "Kia", "KIA logo3.svg", "Q884", 1944),
-  b("Q172741", "Subaru", "Subaru logo.svg", "Q17", 1953),
-  b("Q6746", "Citroën", "Citroen 2022.svg", "Q142", 1919, "Citroën"),
-  b("Q29637", "Škoda", "Skoda Auto logo (2022).svg", "Q213", 1895, "Škoda_Auto"),
-  b("Q215293", "Volvo", "Volvo logo1.svg", "Q34", 1927, "Volvo_Cars"),
-  b("Q30113", "Jeep", "Jeep logo.svg", "Q30", 1941),
-  b("Q40966", "Opel", "Opel-Logo 2021.svg", "Q183", 1862),
-  b("Q7501", "Fiat", "Fiat Automobiles logo.svg", "Q38", 1899, "Fiat_Automobiles"),
+  b("Q53268", "Toyota", ["Toyota carlogo.svg", "Toyota Motor Corporation logo (2020).svg", "Toyota EU.svg", "Toyota logo.png"], "Q17", 1937),
+  b("Q26678", "BMW", ["BMW.svg", "BMW logo (gray).svg", "BMW logo (2017).svg"], "Q183", 1916),
+  b("Q36008", "Mercedes-Benz", ["Mercedes-Logo.svg", "Mercedes-Benz Logo 2010.svg", "Mercedes-Benz free logo.svg"], "Q183", 1926),
+  b("Q246", "Volkswagen", ["Volkswagen logo 2019.svg", "Volkswagen Logo.png", "VW-Logo.svg"], "Q183", 1937),
+  b("Q44294", "Ford", ["Ford logo flat.svg", "Ford Motor Company Logo.svg", "Ford logo.svg"], "Q30", 1903, "Ford_Motor_Company"),
+  b("Q23317", "Audi", ["Audi-Logo 2016.svg", "Audi logo detail.svg", "Audi Rings.svg"], "Q183", 1909),
+  b("Q9584", "Honda", ["Honda Logo.svg", "Honda logo.png", "Honda-logo.svg"], "Q17", 1948),
+  b("Q478214", "Tesla", ["Tesla Motors.svg", "Tesla T symbol.svg", "Tesla logo.png"], "Q30", 2003, "Tesla,_Inc."),
+  b("Q27586", "Ferrari", ["Ferrari-Logo.svg", "Scuderia Ferrari Logo.svg", "Prancing horse.svg"], "Q38", 1939),
+  b("Q40993", "Porsche", ["Porsche logo.svg", "Porsche Wappen.svg", "Porsche wordmark.svg"], "Q183", 1931),
+  b("Q20165", "Nissan", ["Nissan 2020 logo.svg", "Nissan logo.png", "Nissan-logo.svg"], "Q17", 1933),
+  b("Q29570", "Chevrolet", ["Chevrolet logo.svg", "Chevrolet-logo.png", "Chevrolet.svg"], "Q30", 1911),
+  b("Q6686", "Renault", ["Renault 2021 Text.svg", "Renault 2021.svg", "Renault Logo.svg"], "Q142", 1899),
+  b("Q35886", "Lamborghini", ["Lamborghini Logo.svg", "Lamborghini logo.png", "Lamborghini.svg"], "Q38", 1963),
+  b("Q6742", "Peugeot", ["Peugeot Logo.svg", "Peugeot 2021 Logo.svg", "Peugeot logo.png"], "Q142", 1810),
+  b("Q55931", "Hyundai", ["Hyundai Motor Company logo.svg", "Hyundai logo.svg", "Hyundai-logo.png"], "Q884", 1967, "Hyundai_Motor_Company"),
+  b("Q35996", "Mazda", ["Mazda logo with emblem.svg", "Mazda logo.svg", "Mazda-logo.png"], "Q17", 1920),
+  b("Q181642", "Suzuki", ["Suzuki logo 2.svg", "Suzuki Motor Corporation logo.svg", "Suzuki logo.png"], "Q17", 1909),
+  b("Q35349", "Kia", ["KIA logo3.svg", "KIA logo2.svg", "Kia-logo.png"], "Q884", 1944),
+  b("Q172741", "Subaru", ["Subaru logo.svg", "Subaru Corporation logo.svg", "Subaru-logo.png"], "Q17", 1953),
+  b("Q6746", "Citroën", ["Citroen 2022.svg", "Citroën 2021.svg", "Citroen-logo.png"], "Q142", 1919, "Citroën"),
+  b("Q29637", "Škoda", ["Skoda Auto logo (2022).svg", "Škoda Auto logo.svg", "Skoda-logo.png"], "Q213", 1895, "Škoda_Auto"),
+  b("Q215293", "Volvo", ["Volvo logo1.svg", "Volvo-Iron-Mark.svg", "Volvo Cars logo.svg"], "Q34", 1927, "Volvo_Cars"),
+  b("Q30113", "Jeep", ["Jeep logo.svg", "Jeep wordmark.svg", "Jeep-logo.png"], "Q30", 1941),
+  b("Q40966", "Opel", ["Opel-Logo 2021.svg", "Opel Logo 2017.svg", "Opel-logo.png"], "Q183", 1862),
+  b("Q7501", "Fiat", ["Fiat Automobiles logo.svg", "Fiat logo.svg", "Fiat-logo.png"], "Q38", 1899, "Fiat_Automobiles"),
 ];
 
-export const brandLogoUrl = (x: SeedBrand) => flag(x.logoFile);
+export const commonsUrl = flag;
+export const brandLogoUrls = (x: SeedBrand) => x.logoCandidates.map(flag);

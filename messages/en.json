@@ -23,7 +23,12 @@
     "tmpl": {
       "morePopulation": "Who has the larger population?",
       "popHigher": "{a} has a larger population than {b}",
-      "areaHigher": "{a} is larger by area than {b}"
+      "areaHigher": "{a} is larger by area than {b}",
+      "isFlag": "This is the flag of {a}",
+      "isArms": "This is the coat of arms of {a}",
+      "isLogo": "This is the logo of {a}",
+      "langOf": "{b} is an official language of {a}",
+      "brandFrom": "{a} is a brand from {b}"
     },
     "result": "Deck finished",
     "bestStreak": "Best streak",
@@ -38,8 +43,9 @@
   },
   "settings": {
     "layout": "Card layout",
-    "layout_duel": "Duel — a pair of cards, swipe",
-    "layout_quad": "Classic — 4 options"
+    "layout_single": "Single — one card, true/false swipe",
+    "layout_duel": "Double — a pair of cards, swipe",
+    "layout_quad": "Multi — 4 options"
   },
   "auth": {
     "signin": "Sign in",

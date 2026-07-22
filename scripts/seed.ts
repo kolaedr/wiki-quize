@@ -5,18 +5,21 @@
  *
  *   npm run db:seed        (requires DATABASE_URL in .env)
  *
- * Idempotent: topics/games upsert by slug, entities are replaced per topic.
- * A later admin-panel import of the same preset simply overwrites this data.
+ * Every image URL is availability-checked before it enters the DB (broken →
+ * dropped; brand logos pick the first working candidate). Idempotent:
+ * topics/games upsert by slug, entities are replaced per topic; a later
+ * admin-panel import of the same preset simply overwrites this data.
  */
 import "dotenv/config";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { eq } from "drizzle-orm";
 import { games, limits, topicEntities, topics } from "../src/db/schema";
+import { filterWorkingUrls } from "../src/lib/validate-urls";
 import {
   BRANDS,
   COUNTRIES,
-  brandLogoUrl,
+  brandLogoUrls,
   countryArmsUrl,
   countryFlagUrl,
   countryRef,
@@ -68,7 +71,7 @@ async function upsertGame(g: {
   topicId: string;
   mechanic: "choice" | "higher_lower" | "swipe_binary";
   title: object;
-  emoji: string;
+  icon: string;
   config: Record<string, unknown>;
   itemCount: number;
 }) {
@@ -85,15 +88,15 @@ async function upsertGame(g: {
       topicId: g.topicId,
       mechanic: g.mechanic,
       config,
-      style: { emoji: g.emoji },
+      style: { icon: g.icon },
       title: g.title,
       status: "published",
     })
     .onConflictDoUpdate({
       target: games.slug,
-      set: { topicId: g.topicId, status: "published", config },
+      set: { topicId: g.topicId, status: "published", config, style: { icon: g.icon } },
     });
-  console.log(`  game ${g.slug} (${config.levels} levels)`);
+  console.log(`  game ${g.slug} (${config.levels} levels, ${g.itemCount} items)`);
 }
 
 async function main() {
@@ -104,6 +107,21 @@ async function main() {
       .values({ key, value })
       .onConflictDoUpdate({ target: limits.key, set: { value } });
   }
+
+  // ── Validate every image URL up front ─────────────────────────
+  console.log("Validating image URLs (flags, arms, logos)…");
+  const flagUrls = COUNTRIES.map(countryFlagUrl);
+  const armsUrls = COUNTRIES.map(countryArmsUrl);
+  const logoUrls = BRANDS.flatMap(brandLogoUrls);
+  const ok = await filterWorkingUrls([...flagUrls, ...armsUrls, ...logoUrls]);
+
+  const brokenFlags = flagUrls.filter((u) => !ok.has(u)).length;
+  const brokenArms = armsUrls.filter((u) => !ok.has(u)).length;
+  console.log(
+    `  flags: ${COUNTRIES.length - brokenFlags}/${COUNTRIES.length} ok · arms: ${
+      COUNTRIES.length - brokenArms
+    }/${COUNTRIES.length} ok`,
+  );
 
   // ── Countries ────────────────────────────────────────────────
   console.log("Seeding topic: countries…");
@@ -121,25 +139,30 @@ async function main() {
   await db.delete(topicEntities).where(eq(topicEntities.topicId, countriesTopic.id));
   const nC = COUNTRIES.length;
   await db.insert(topicEntities).values(
-    COUNTRIES.map((x, i) => ({
-      topicId: countriesTopic.id,
-      wikidataQid: x.qid,
-      labels: { en: x.en, uk: x.uk },
-      values: {
-        flag: countryFlagUrl(x),
-        flagEmoji: x.emoji,
-        arms: countryArmsUrl(x),
-        languages: x.langs,
-        population: x.population,
-        area: x.area,
-      },
-      imageUrl: countryFlagUrl(x),
-      wikiLinks: { en: x.wikiEn, uk: x.wikiUk },
-      sitelinks: 250 - i,
-      difficultyScore: nC > 1 ? 1 - i / (nC - 1) : 1,
-    })),
+    COUNTRIES.map((x, i) => {
+      const flagU = countryFlagUrl(x);
+      const armsU = countryArmsUrl(x);
+      return {
+        topicId: countriesTopic.id,
+        wikidataQid: x.qid,
+        labels: { en: x.en, uk: x.uk },
+        values: {
+          flag: ok.has(flagU) ? flagU : undefined,
+          flagEmoji: x.emoji, // content fallback if the flag image ever breaks
+          arms: ok.has(armsU) ? armsU : undefined,
+          languages: x.langs,
+          population: x.population,
+          area: x.area,
+        },
+        imageUrl: ok.has(flagU) ? flagU : null,
+        wikiLinks: { en: x.wikiEn, uk: x.wikiUk },
+        sitelinks: 250 - i,
+        difficultyScore: nC > 1 ? 1 - i / (nC - 1) : 1,
+      };
+    }),
   );
-  console.log(`  ${nC} countries`);
+  const armsCount = COUNTRIES.filter((x) => ok.has(countryArmsUrl(x))).length;
+  console.log(`  ${nC} countries (${armsCount} with verified arms)`);
 
   // ── Car brands ───────────────────────────────────────────────
   console.log("Seeding topic: car-brands…");
@@ -154,35 +177,48 @@ async function main() {
   );
   await db.delete(topicEntities).where(eq(topicEntities.topicId, brandsTopic.id));
   const nB = BRANDS.length;
+  let logosOk = 0;
   await db.insert(topicEntities).values(
-    BRANDS.map((x, i) => ({
-      topicId: brandsTopic.id,
-      wikidataQid: x.qid,
-      labels: { en: x.name, uk: x.name },
-      values: {
-        logo: brandLogoUrl(x),
-        originCountries: [countryRef(x.origin)],
-        inception: x.inception,
-      },
-      imageUrl: brandLogoUrl(x),
-      wikiLinks: { en: x.wikiEn },
-      sitelinks: 200 - i,
-      difficultyScore: nB > 1 ? 1 - i / (nB - 1) : 1,
-    })),
+    BRANDS.map((x, i) => {
+      // first WORKING logo candidate — no broken logos in the game
+      const logo = brandLogoUrls(x).find((u) => ok.has(u));
+      if (logo) logosOk++;
+      return {
+        topicId: brandsTopic.id,
+        wikidataQid: x.qid,
+        labels: { en: x.name, uk: x.name },
+        values: {
+          logo,
+          originCountries: [countryRef(x.origin)],
+          inception: x.inception,
+        },
+        imageUrl: logo ?? null,
+        wikiLinks: { en: x.wikiEn },
+        sitelinks: 200 - i,
+        difficultyScore: nB > 1 ? 1 - i / (nB - 1) : 1,
+      };
+    }),
   );
-  console.log(`  ${nB} brands`);
+  console.log(`  ${nB} brands (${logosOk} with verified logos)`);
+  if (logosOk < nB) {
+    const missing = BRANDS.filter((x) => !brandLogoUrls(x).some((u) => ok.has(u))).map(
+      (x) => x.name,
+    );
+    console.log(`  no working logo for: ${missing.join(", ")} — excluded from logo games`);
+  }
 
   // ── Games (the user's starter list + mechanic showcases) ─────
   console.log("Seeding games…");
   const ct = countriesTopic.id;
   const bt = brandsTopic.id;
-  await upsertGame({ slug: "flags", topicId: ct, mechanic: "choice", emoji: "🚩", title: { en: "Flags of the World", uk: "Прапори світу" }, config: { answerRole: "flag" }, itemCount: nC });
-  await upsertGame({ slug: "coat-of-arms", topicId: ct, mechanic: "choice", emoji: "🛡️", title: { en: "Coats of Arms", uk: "Герби країн" }, config: { answerRole: "arms" }, itemCount: nC });
-  await upsertGame({ slug: "country-languages", topicId: ct, mechanic: "choice", emoji: "💬", title: { en: "Language & Country", uk: "Мова і країна" }, config: { refRole: "languages" }, itemCount: nC });
-  await upsertGame({ slug: "car-logos", topicId: bt, mechanic: "choice", emoji: "🚗", title: { en: "Car Logos", uk: "Логотипи авто" }, config: { answerRole: "logo" }, itemCount: nB });
-  await upsertGame({ slug: "car-origin", topicId: bt, mechanic: "choice", emoji: "🌍", title: { en: "Car Brand Origins", uk: "Звідки бренд авто" }, config: { refRole: "originCountries", promptImageRole: "logo" }, itemCount: nB });
-  await upsertGame({ slug: "population-duel", topicId: ct, mechanic: "higher_lower", emoji: "👥", title: { en: "Higher: Population", uk: "Більше: населення" }, config: { valueRole: "population", tmpl: "morePopulation", imageRole: "flag" }, itemCount: nC });
-  await upsertGame({ slug: "true-false-countries", topicId: ct, mechanic: "swipe_binary", emoji: "⚖️", title: { en: "True or False: Countries", uk: "Правда чи ні: країни" }, config: { roles: [{ role: "population", tmpl: "popHigher" }, { role: "area", tmpl: "areaHigher" }] }, itemCount: nC });
+  const flagsCount = COUNTRIES.filter((x) => ok.has(countryFlagUrl(x))).length;
+  await upsertGame({ slug: "flags", topicId: ct, mechanic: "choice", icon: "flag", title: { en: "Flags of the World", uk: "Прапори світу" }, config: { answerRole: "flag", singleTmpl: "isFlag", emojiRole: "flagEmoji" }, itemCount: flagsCount });
+  await upsertGame({ slug: "coat-of-arms", topicId: ct, mechanic: "choice", icon: "shield", title: { en: "Coats of Arms", uk: "Герби країн" }, config: { answerRole: "arms", singleTmpl: "isArms" }, itemCount: armsCount });
+  await upsertGame({ slug: "country-languages", topicId: ct, mechanic: "choice", icon: "languages", title: { en: "Language & Country", uk: "Мова і країна" }, config: { refRole: "languages", singleTmpl: "langOf" }, itemCount: nC });
+  await upsertGame({ slug: "car-logos", topicId: bt, mechanic: "choice", icon: "car", title: { en: "Car Logos", uk: "Логотипи авто" }, config: { answerRole: "logo", singleTmpl: "isLogo" }, itemCount: logosOk });
+  await upsertGame({ slug: "car-origin", topicId: bt, mechanic: "choice", icon: "globe", title: { en: "Car Brand Origins", uk: "Звідки бренд авто" }, config: { refRole: "originCountries", promptImageRole: "logo", singleTmpl: "brandFrom" }, itemCount: nB });
+  await upsertGame({ slug: "population-duel", topicId: ct, mechanic: "higher_lower", icon: "users", title: { en: "Higher: Population", uk: "Більше: населення" }, config: { valueRole: "population", tmpl: "morePopulation", imageRole: "flag" }, itemCount: nC });
+  await upsertGame({ slug: "true-false-countries", topicId: ct, mechanic: "swipe_binary", icon: "scale", title: { en: "True or False: Countries", uk: "Правда чи ні: країни" }, config: { roles: [{ role: "population", tmpl: "popHigher" }, { role: "area", tmpl: "areaHigher" }] }, itemCount: nC });
 
   console.log("Done. Open / — the catalog should show 7 games.");
 }
