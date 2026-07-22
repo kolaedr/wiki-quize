@@ -12,44 +12,51 @@
 
 ## 1.1. Скаффолд і інфраструктура
 
-- [ ] Next.js (App Router, TS, Tailwind) + деплой на Vercel з першого дня
-- [ ] Neon Postgres через Vercel Marketplace, env-и в проєкті
-- [ ] Drizzle + drizzle-kit: конфіг, перша міграція, npm-скрипти (`db:generate`, `db:migrate`, `db:studio`)
-- [ ] Better Auth: email+password + Google OAuth, таблиці в нашій БД, ролі `user|admin`
-- [ ] Базовий layout: `100dvh` app-shell, safe-area, next-intl (EN)
-- [ ] PWA-основа з першого дня: manifest, іконки, service worker (кеш shell + зіграних колод)
+- [x] Next.js (App Router, TS, Tailwind) + деплой на Vercel з першого дня
+- [x] Neon Postgres через Vercel Marketplace, env-и в проєкті
+- [x] Drizzle + drizzle-kit: конфіг, перша міграція, npm-скрипти (`db:generate`, `db:migrate`, `db:studio`)
+- [x] Better Auth: email+password + Google OAuth, таблиці в нашій БД, ролі `user|admin`
+- [x] Базовий layout: `100dvh` app-shell, safe-area, next-intl (EN)
+- [x] PWA: manifest + іконка
+- [ ] PWA: service worker (кеш shell + зіграних колод)
 
 ## 1.2. Схема БД
 
-- [ ] Таблиці: `topics`, `topic_entities`, `games`, `sessions`, `import_jobs`, `limits` (+ auth-таблиці Better Auth)
-- [ ] Типи TS, згенеровані зі схеми; сід-скрипт з дефолтними `limits`
+- [x] Таблиці: `topics`, `topic_entities`, `games`, `sessions`, `import_jobs`, `limits`, `challenges` (+ auth-таблиці Better Auth); всі текстові поля — jsonb per-locale
+- [x] Типи TS зі схеми
+- [ ] Сід-скрипт з дефолтними `limits`
 
 ## 1.3. Інджест (TS)
 
-- [ ] Клієнт SPARQL з тротлінгом і User-Agent; хелпер пагінації
-- [ ] Пресети тем (конфіг у код/БД): **Країни** (P31 Q6256: label, прапор P41, **герб P237**, **офіційні мови P37**, столиця P36, населення P1082, площа P2046, континент P30), **Автобренди** (виробники/марки авто: label, логотип P154, країна походження P495/P17, рік заснування P571)
-- [ ] Джоба імпорту: чанки 200–500, курсор у `import_jobs`, ретраї, upsert у `topic_entities`
-- [ ] Фільтри якості: sitelinks ≥ N, лейбли в усіх активних мовах, обов'язкові поля, precision дат ≥ рік, preferred rank, дедуп
-- [ ] Pageviews-збагачення + `difficulty_score` (перцентиль у темі)
-- [ ] `image_credit` через `imageinfo` (автор, ліцензія)
-- [ ] Звіт валідації теми (JSON у `topics` або окремо): кількість, покриття полів/мов → перелік доступних механік
-- [ ] Vercel Cron: тік обробки джоб + ресинк тем раз на 2 тижні
+- [x] Клієнт SPARQL з тротлінгом і User-Agent (`src/lib/wikidata/sparql.ts`)
+- [x] Пресети тем: **Країни** (P41 прапор, P237 герб, P37 мови, P1082 населення, P2046 площа, P30 континенти), **Автобренди** (P154 лого, P495/P17 країна, P571 заснування) — `src/lib/ingest/presets.ts`
+- [x] Імпорт-раннер: нормалізація, фільтри, difficulty_score (перцентиль sitelinks), запис у БД, `import_jobs` — `src/lib/ingest/run.ts` (спрощений: один прохід; чанки з курсором — TODO для великих UGC-тем)
+- [x] API-роут запуску: `POST /api/admin/import` під `ADMIN_TASK_SECRET` (тимчасово, до адмінки з ролями)
+- [x] Фільтри якості: sitelinks-поріг, лейбли в усіх активних мовах, обов'язкові поля, дедуп
+- [ ] Фільтри: precision дат ≥ рік, preferred rank
+- [ ] Pageviews-збагачення (зараз difficulty тільки з sitelinks)
+- [ ] `image_credit` через `imageinfo`
+- [x] Звіт валідації теми (fetched/accepted/dropped/покриття полів) → `topics.validation_report`
+- [ ] Vercel Cron: періодичний ресинк тем
 
 ## 1.4. Механіки і колоди
 
-- [ ] Контракт `MechanicSpec` (requires, minEntities, buildDeck, Component) — див. PROJECT.md §2.2
-- [ ] Server-side `buildDeck(seed)`: вибірка по складності, дистрактори (правдоподібні сусіди), мін. розриви значень (≥15% числа, ≥5 років дати), кешування колод
-- [ ] **Правило мультизначності**: для фактів з кількома правильними відповідями (мова P37 офіційна в кількох країнах) дистрактори виключають ВСІ правильні; занадто розмиті факти (>5 правильних) — скіп сутності для цієї механіки
-- [ ] `choice-image` / `choice-label` (одна механіка, параметр напрямку) — **прапори наскрізь як еталон**, далі герби/мови/лого/країни походження
-- [ ] `swipe-binary`: motion drag, пороги, fling, стек карток, кнопки-дублери, клавіші ←/→
+- [x] Типи `ChoiceCard`/`DeckEntity`/`BuildChoiceOptions` (`src/lib/deck/types.ts`)
+- [x] Server-side `buildChoiceDeck(seed)`: seeded RNG (mulberry32), дистрактори-сусіди за складністю, ramp легкі→складні (`src/lib/deck/build.ts`)
+- [x] **Правило мультизначності**: `answerKeys` — дистрактор не може ділити жоден ключ відповіді з питанням
+- [x] Механіка `choice` (демо: прапор → 4 назви; emoji-фолбек якщо картинка не вантажиться)
+- [ ] Підключити choice-ігри до БД (замість семплу) — всі 5 стартових
+- [ ] `swipe-binary`: motion drag, пороги, fling, стек карток
 - [ ] `higher-lower`
-- [ ] Шаблони питань EN (`templates/en.json`)
+- [ ] Шаблони питань EN (`templates/en.json`) — для swipe-binary формулювань
 
 ## 1.5. Ігровий флоу
 
-- [ ] Екран гри: один в'юпорт, 3 життя, стрік-множник, прогрес колоди
-- [ ] Фідбек після відповіді: правильна відповідь + пояснення + лінк на вікі + credit картинки по тапу
-- [ ] Екран результату; гостьовий прогрес у localStorage
+- [x] Екран гри `/play`: один в'юпорт, 3 життя, стрік з множником, прогрес-бар, анімації motion
+- [x] Фідбек після відповіді: підсвітка правильної/неправильної + лінк на вікі
+- [ ] Пояснення (extract з REST summary) і credit картинки по тапу
+- [x] Екран результату + рестарт
+- [ ] Гостьовий прогрес у localStorage
 - [ ] Каталог з 5 стартовими іграми (створює адмін формою)
 
 ## 1.6. Адмінка (мінімум етапу)

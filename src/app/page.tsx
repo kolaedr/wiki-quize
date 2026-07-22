@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -32,9 +33,12 @@ export default function Home() {
           </div>
         </div>
 
-        <span className="glass-card px-4 py-2 text-xs text-muted">
-          {t("home.playSoon")}
-        </span>
+        <Link
+          href="/play"
+          className="shadow-glow rounded-full bg-accent px-8 py-4 text-sm font-semibold text-white transition-transform active:scale-95"
+        >
+          {t("home.tryDemo")}
+        </Link>
       </main>
     </>
   );

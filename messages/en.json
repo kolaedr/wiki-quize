@@ -6,8 +6,17 @@
   },
   "home": {
     "playSoon": "First decks coming soon",
+    "tryDemo": "Try the demo deck",
     "catalog": "Catalog",
     "daily": "Daily deck"
+  },
+  "game": {
+    "flagsTitle": "Flags of the World",
+    "result": "Deck finished",
+    "bestStreak": "Best streak",
+    "streak": "streak",
+    "playAgain": "Play again",
+    "readMore": "Read on Wikipedia"
   },
   "theme": {
     "light": "Light",
