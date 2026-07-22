@@ -22,10 +22,29 @@ export interface ChoiceOption {
 export interface ChoiceCard {
   id: string;
   mechanic: "choice";
-  prompt: { label?: string; image?: string; emoji?: string };
+  prompt: {
+    label?: string;
+    image?: string;
+    emoji?: string;
+    /** i18n template key (rendered as game.tmpl.<key> with params) — used by higher-lower prompts. */
+    tmpl?: string;
+    params?: Record<string, string | number>;
+  };
   options: ChoiceOption[];
   correctKey: string;
   explain: { text?: string; wikiUrl?: string };
+}
+
+/** True/false statement card: swipe right = true, left = false. */
+export interface BinaryCard {
+  id: string;
+  mechanic: "binary";
+  /** i18n template key under game.tmpl.* */
+  tmpl: string;
+  params: Record<string, string | number>;
+  image?: string;
+  isTrue: boolean;
+  explain: { wikiUrl?: string };
 }
 
 export interface BuildChoiceOptions {
@@ -44,4 +63,9 @@ export interface BuildChoiceOptions {
    * Default: the entity itself ([qid]).
    */
   answerKeys?: (e: DeckEntity) => string[];
+  /**
+   * Difficulty levels: questions are drawn only from this subset
+   * (e.g. level slice), while distractors may come from the full pool.
+   */
+  questions?: DeckEntity[];
 }

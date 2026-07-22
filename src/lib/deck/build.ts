@@ -1,5 +1,19 @@
 import { rngFromSeed, shuffle } from "@/lib/rng";
-import type { BuildChoiceOptions, ChoiceCard, DeckEntity } from "./types";
+import type { BinaryCard, BuildChoiceOptions, ChoiceCard, DeckEntity } from "./types";
+
+/** {qid, labels} reference stored inside entity values (languages, origin countries…). */
+export interface EntityRef {
+  qid: string;
+  labels: Record<string, string | undefined>;
+}
+
+function refsOf(e: DeckEntity, role: string): EntityRef[] {
+  const v = e.values[role];
+  if (!Array.isArray(v)) return [];
+  return v.filter(
+    (r): r is EntityRef => typeof r === "object" && r !== null && "qid" in r,
+  );
+}
 
 /**
  * Seeded server-side deck builder for the `choice` mechanic.
@@ -24,9 +38,11 @@ export function buildChoiceDeck(
   const pool = entities.filter((e) => e.qid);
   if (pool.length < optionCount) return [];
 
-  // Pick question entities, then order easy → hard for a difficulty ramp
-  const questions = shuffle(pool, rnd)
-    .slice(0, Math.min(deckSize, pool.length))
+  // Pick question entities (from the level slice when provided),
+  // then order easy → hard for a difficulty ramp
+  const questionPool = opts.questions?.length ? opts.questions : pool;
+  const questions = shuffle(questionPool, rnd)
+    .slice(0, Math.min(deckSize, questionPool.length))
     .sort((a, b) => (b.difficultyScore ?? 0.5) - (a.difficultyScore ?? 0.5));
 
   const cards: ChoiceCard[] = [];
@@ -72,5 +88,200 @@ export function buildChoiceDeck(
     });
   }
 
+  return cards;
+}
+
+/**
+ * Relation ("ref") choice deck: the answer is a RELATED entity stored in
+ * values[refRole] as [{qid, labels}] — e.g. country → its language, brand →
+ * its origin country. Multi-valued rule: distractor refs must not appear
+ * among ANY of the question entity's refs.
+ */
+export function buildRefChoiceDeck(
+  entities: DeckEntity[],
+  opts: {
+    seed: string;
+    locale: string;
+    refRole: string;
+    deckSize?: number;
+    optionCount?: number;
+    promptImageRole?: string;
+    questions?: DeckEntity[];
+  },
+): ChoiceCard[] {
+  const { seed, locale, refRole, deckSize = 10, optionCount = 4 } = opts;
+  const rnd = rngFromSeed(seed);
+
+  const pool = entities.filter((e) => refsOf(e, refRole).length > 0);
+  if (pool.length < 2) return [];
+
+  // Global ref dictionary (deduped by qid)
+  const allRefs = new Map<string, EntityRef>();
+  for (const e of pool) for (const r of refsOf(e, refRole)) allRefs.set(r.qid, r);
+
+  const refLabel = (r: EntityRef) => r.labels[locale] ?? r.labels.en ?? r.qid;
+  const questionPool = (opts.questions?.length ? opts.questions : pool).filter(
+    (e) => refsOf(e, refRole).length > 0,
+  );
+
+  const questions = shuffle(questionPool, rnd)
+    .slice(0, Math.min(deckSize, questionPool.length))
+    .sort((a, b) => (b.difficultyScore ?? 0.5) - (a.difficultyScore ?? 0.5));
+
+  const cards: ChoiceCard[] = [];
+  for (const q of questions) {
+    const own = refsOf(q, refRole);
+    const ownQids = new Set(own.map((r) => r.qid));
+    const correct = own[Math.floor(rnd() * own.length)];
+
+    const distractors = shuffle(
+      [...allRefs.values()].filter((r) => !ownQids.has(r.qid)),
+      rnd,
+    ).slice(0, optionCount - 1);
+    if (distractors.length < optionCount - 1) continue;
+
+    const options = shuffle(
+      [correct, ...distractors].map((r) => ({ key: r.qid, label: refLabel(r) })),
+      rnd,
+    );
+
+    cards.push({
+      id: `${q.qid}-${cards.length}`,
+      mechanic: "choice",
+      prompt: {
+        label: q.labels[locale] ?? q.labels.en,
+        image: opts.promptImageRole
+          ? ((q.values[opts.promptImageRole] as string | undefined) ?? undefined)
+          : undefined,
+      },
+      options,
+      correctKey: correct.qid,
+      explain: { wikiUrl: q.wikiLinks?.[locale] ?? q.wikiLinks?.en ?? undefined },
+    });
+  }
+  return cards;
+}
+
+/**
+ * Higher-lower deck rendered by the duel board: templated prompt
+ * ("Who has the larger population?") + two entity cards; the correct one
+ * has the greater numeric value. Pairs require a ≥ minGapRatio difference
+ * so the answer is never debatable.
+ */
+export function buildHigherLowerDeck(
+  entities: DeckEntity[],
+  opts: {
+    seed: string;
+    locale: string;
+    valueRole: string;
+    tmpl: string;
+    imageRole?: string;
+    deckSize?: number;
+    minGapRatio?: number;
+    questions?: DeckEntity[];
+  },
+): ChoiceCard[] {
+  const { seed, locale, valueRole, tmpl, deckSize = 10, minGapRatio = 0.15 } = opts;
+  const rnd = rngFromSeed(seed);
+
+  const val = (e: DeckEntity) => Number(e.values[valueRole]);
+  const pool = entities.filter((e) => Number.isFinite(val(e)) && val(e) > 0);
+  const base = (opts.questions?.length ? opts.questions : pool).filter((e) =>
+    Number.isFinite(val(e)),
+  );
+  if (pool.length < 2) return [];
+
+  const cards: ChoiceCard[] = [];
+  const used = new Set<string>();
+  const shuffled = shuffle(base, rnd);
+
+  for (const a of shuffled) {
+    if (cards.length >= deckSize) break;
+    if (used.has(a.qid)) continue;
+    // partner: enough gap, prefer unused, from the WHOLE pool
+    const partner = shuffle(pool, rnd).find(
+      (b) =>
+        b.qid !== a.qid &&
+        !used.has(b.qid) &&
+        Math.abs(val(a) - val(b)) / Math.max(val(a), val(b)) >= minGapRatio,
+    );
+    if (!partner) continue;
+    used.add(a.qid);
+    used.add(partner.qid);
+
+    const pair = shuffle([a, partner], rnd);
+    const correct = val(pair[0]) >= val(pair[1]) ? pair[0] : pair[1];
+    const label = (e: DeckEntity) => e.labels[locale] ?? e.labels.en;
+    const image = (e: DeckEntity) =>
+      opts.imageRole ? ((e.values[opts.imageRole] as string | undefined) ?? undefined) : undefined;
+
+    cards.push({
+      id: `${a.qid}-${partner.qid}`,
+      mechanic: "choice",
+      prompt: { tmpl, params: {} },
+      options: pair.map((e) => ({ key: e.qid, label: label(e), image: image(e) })),
+      correctKey: correct.qid,
+      explain: {
+        wikiUrl: correct.wikiLinks?.[locale] ?? correct.wikiLinks?.en ?? undefined,
+      },
+    });
+  }
+  return cards;
+}
+
+/**
+ * True/false deck (swipe right = true, left = false). Statements compare
+ * two entities on a numeric role via an i18n template; falsehoods swap the
+ * pair. Gap rule keeps statements unambiguous.
+ */
+export function buildBinaryDeck(
+  entities: DeckEntity[],
+  opts: {
+    seed: string;
+    locale: string;
+    roles: { role: string; tmpl: string }[];
+    deckSize?: number;
+    minGapRatio?: number;
+    questions?: DeckEntity[];
+  },
+): BinaryCard[] {
+  const { seed, locale, roles, deckSize = 10, minGapRatio = 0.15 } = opts;
+  const rnd = rngFromSeed(seed);
+  const label = (e: DeckEntity) => e.labels[locale] ?? e.labels.en ?? e.qid;
+
+  const cards: BinaryCard[] = [];
+  const base = opts.questions?.length ? opts.questions : entities;
+  const shuffledQ = shuffle(base, rnd);
+  const used = new Set<string>();
+
+  for (const a of shuffledQ) {
+    if (cards.length >= deckSize) break;
+    const spec = roles[Math.floor(rnd() * roles.length)];
+    const val = (e: DeckEntity) => Number(e.values[spec.role]);
+    if (!Number.isFinite(val(a)) || used.has(a.qid)) continue;
+
+    const partner = shuffle(entities, rnd).find(
+      (b) =>
+        b.qid !== a.qid &&
+        Number.isFinite(val(b)) &&
+        Math.abs(val(a) - val(b)) / Math.max(val(a), val(b)) >= minGapRatio,
+    );
+    if (!partner) continue;
+    used.add(a.qid);
+
+    const isTrue = rnd() < 0.5;
+    const [hi, lo] = val(a) >= val(partner) ? [a, partner] : [partner, a];
+    // template asserts "{a} > {b}"; a truthful card puts hi first
+    const [x, y] = isTrue ? [hi, lo] : [lo, hi];
+
+    cards.push({
+      id: `${a.qid}-${spec.role}-${cards.length}`,
+      mechanic: "binary",
+      tmpl: spec.tmpl,
+      params: { a: label(x), b: label(y) },
+      isTrue,
+      explain: { wikiUrl: x.wikiLinks?.[locale] ?? x.wikiLinks?.en ?? undefined },
+    });
+  }
   return cards;
 }

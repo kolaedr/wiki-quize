@@ -5,30 +5,81 @@ import { ACTIVE_LOCALES } from "@/i18n/locales";
 import { sparqlQuery } from "@/lib/wikidata/sparql";
 import { PRESETS, type RawEntity } from "./presets";
 
-const STARTER_GAMES: Record<
-  string,
-  { slug: string; title: Record<string, string>; answerRole: string; emoji: string }[]
-> = {
+export interface StarterGame {
+  slug: string;
+  title: Record<string, string>;
+  emoji: string;
+  mechanic: "choice" | "higher_lower" | "swipe_binary";
+  /** merged into games.config next to deckSize/perLevel/levels */
+  config: Record<string, unknown>;
+  /** role used to count entities for level math */
+  countRole?: string;
+}
+
+export const STARTER_GAMES: Record<string, StarterGame[]> = {
   countries: [
     {
       slug: "flags",
       title: { en: "Flags of the World", uk: "Прапори світу" },
-      answerRole: "flag",
       emoji: "🚩",
+      mechanic: "choice",
+      config: { answerRole: "flag" },
+      countRole: "flag",
     },
     {
       slug: "coat-of-arms",
       title: { en: "Coats of Arms", uk: "Герби країн" },
-      answerRole: "arms",
       emoji: "🛡️",
+      mechanic: "choice",
+      config: { answerRole: "arms" },
+      countRole: "arms",
+    },
+    {
+      slug: "country-languages",
+      title: { en: "Language & Country", uk: "Мова і країна" },
+      emoji: "💬",
+      mechanic: "choice",
+      config: { refRole: "languages" },
+      countRole: "languages",
+    },
+    {
+      slug: "population-duel",
+      title: { en: "Higher: Population", uk: "Більше: населення" },
+      emoji: "👥",
+      mechanic: "higher_lower",
+      config: { valueRole: "population", tmpl: "morePopulation", imageRole: "flag" },
+      countRole: "population",
+    },
+    {
+      slug: "true-false-countries",
+      title: { en: "True or False: Countries", uk: "Правда чи ні: країни" },
+      emoji: "⚖️",
+      mechanic: "swipe_binary",
+      config: {
+        roles: [
+          { role: "population", tmpl: "popHigher" },
+          { role: "area", tmpl: "areaHigher" },
+        ],
+      },
+      countRole: "population",
     },
   ],
   "car-brands": [
     {
       slug: "car-logos",
       title: { en: "Car Logos", uk: "Логотипи авто" },
-      answerRole: "logo",
       emoji: "🚗",
+      mechanic: "choice",
+      config: { answerRole: "logo" },
+      countRole: "logo",
+    },
+    {
+      slug: "car-origin",
+      title: { en: "Car Brand Origins", uk: "Звідки бренд авто" },
+      emoji: "🌍",
+      mechanic: "choice",
+      config: { refRole: "originCountries", promptImageRole: "logo" },
+      countRole: "originCountries",
     },
   ],
 };
@@ -146,23 +197,38 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
       .where(eq(topics.id, topic.id));
 
     // Auto-create starter games for this preset (published; idempotent by slug).
+    // Difficulty progression: entities are ranked famous → obscure; each game
+    // splits them into levels of `perLevel` items (level 1 = the best-known).
     // Games needing labels of RELATED entities (languages, origin countries)
     // wait for the reference-label enrichment pass — see stage-1 checklist.
+    const PER_LEVEL = 20;
     for (const g of STARTER_GAMES[preset.key] ?? []) {
+      const withRole = g.countRole
+        ? entities.filter((e) => {
+            const v = e.values[g.countRole!];
+            return v != null && (!Array.isArray(v) || v.length > 0);
+          }).length
+        : entities.length;
+      const config = {
+        ...g.config,
+        deckSize: 10,
+        perLevel: PER_LEVEL,
+        levels: Math.max(1, Math.ceil(withRole / PER_LEVEL)),
+      };
       await db
         .insert(games)
         .values({
           slug: g.slug,
           topicId: topic.id,
-          mechanic: "choice",
-          config: { answerRole: g.answerRole, deckSize: 10 },
+          mechanic: g.mechanic,
+          config,
           style: { emoji: g.emoji },
           title: g.title,
           status: "published",
         })
         .onConflictDoUpdate({
           target: games.slug,
-          set: { topicId: topic.id, status: "published" },
+          set: { topicId: topic.id, status: "published", config },
         });
     }
     await db

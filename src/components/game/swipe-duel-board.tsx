@@ -9,6 +9,7 @@ import {
   type MotionValue,
 } from "motion/react";
 import { useTranslations } from "next-intl";
+import { ImageOff } from "lucide-react";
 import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
 import { ResultScreen, StatusBar, StreakBadge } from "./hud";
@@ -68,9 +69,9 @@ export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
             exit={{ opacity: 0, y: -10 }}
             className="flex flex-col items-center gap-1"
           >
-            {card.prompt.label && (
+            {(card.prompt.label || card.prompt.tmpl) && (
               <span className="font-display text-3xl font-bold tracking-tight">
-                {card.prompt.label}
+                {card.prompt.label ?? t(`tmpl.${card.prompt.tmpl}`, card.prompt.params ?? {})}
               </span>
             )}
             {s.picked && card.explain.wikiUrl ? (
@@ -212,6 +213,8 @@ function HandCard({
           />
         ) : option.emoji ? (
           <span className="text-6xl">{option.emoji}</span>
+        ) : option.image && imgFailed && !option.label ? (
+          <ImageOff size={40} className="text-muted opacity-50" />
         ) : null}
         {option.label && (
           <span className="text-center text-sm font-semibold leading-tight">{option.label}</span>

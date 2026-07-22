@@ -14,11 +14,27 @@
     "flagsTitle": "Flags of the World",
     "duelHintTouch": "swipe toward the correct card",
     "duelHintMouse": "click the correct card",
+    "binaryHintTouch": "swipe right — true, left — false",
+    "binaryHintMouse": "true or false?",
+    "true": "True",
+    "false": "False",
+    "itWasTrue": "It's true",
+    "itWasFalse": "It's false",
+    "tmpl": {
+      "morePopulation": "Who has the larger population?",
+      "popHigher": "{a} has a larger population than {b}",
+      "areaHigher": "{a} is larger by area than {b}"
+    },
     "result": "Deck finished",
     "bestStreak": "Best streak",
     "streak": "streak",
     "playAgain": "Play again",
     "readMore": "Read on Wikipedia"
+  },
+  "levels": {
+    "subtitle": "{levels} levels — from famous to obscure",
+    "count": "{levels} levels",
+    "hint": "Pass a level to unlock the next one. Level 1 starts with the best-known items."
   },
   "settings": {
     "layout": "Card layout",

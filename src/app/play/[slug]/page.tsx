@@ -1,36 +1,34 @@
 import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
-import { PlayScreen } from "@/components/game/play-screen";
+import { LevelMap } from "@/components/game/level-map";
 import { resolveText } from "@/i18n/locales";
-import { loadGameDecks } from "@/lib/deck/from-db";
+import { loadGameMeta } from "@/lib/deck/from-db";
 
-export const dynamic = "force-dynamic"; // deck seed varies per day
+export const dynamic = "force-dynamic";
 
-/** DB-backed game: deck built from topic_entities, sessions persisted. */
-export default async function GamePage({
+/** Level map of a DB-backed game (game-pass progression). */
+export default async function GameLevelsPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
   const locale = await getLocale();
-  const seed = new Date().toISOString().slice(0, 10);
 
-  let decks;
+  let meta;
   try {
-    decks = await loadGameDecks(slug, locale, seed);
+    meta = await loadGameMeta(slug);
   } catch {
-    decks = null; // DB unreachable → treat as missing
+    meta = null;
   }
-  if (!decks || decks.duelCards.length === 0) notFound();
+  if (!meta) notFound();
 
   return (
-    <PlayScreen
-      title={resolveText(decks.title, locale)}
-      duelCards={decks.duelCards}
-      quadCards={decks.quadCards}
-      gameId={decks.gameId}
-      seed={seed}
+    <LevelMap
+      slug={meta.slug}
+      title={resolveText(meta.title, locale)}
+      emoji={meta.style.emoji}
+      levels={meta.config.levels}
     />
   );
 }

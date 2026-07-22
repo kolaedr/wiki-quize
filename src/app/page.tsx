@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChevronRight, Play } from "lucide-react";
+import { ChevronRight, Play, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserButton } from "@/components/auth/user-button";
 import { resolveText } from "@/i18n/locales";
+import { getAdminSession } from "@/lib/admin/guard";
 import { listPublishedGames } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic"; // catalog comes from the DB
@@ -11,7 +12,10 @@ export const dynamic = "force-dynamic"; // catalog comes from the DB
 export default async function Home() {
   const t = await getTranslations();
   const locale = await getLocale();
-  const catalog = await listPublishedGames();
+  const [catalog, adminSession] = await Promise.all([
+    listPublishedGames(),
+    getAdminSession(),
+  ]);
 
   return (
     <>
@@ -20,6 +24,15 @@ export default async function Home() {
           {t("app.name")}
         </span>
         <div className="flex items-center gap-2">
+          {adminSession && (
+            <Link
+              href="/admin"
+              title="Admin"
+              className="glass-card flex h-10 w-10 items-center justify-center text-muted transition-colors hover:text-accent"
+            >
+              <Shield size={17} />
+            </Link>
+          )}
           <UserButton />
           <ThemeToggle />
         </div>
@@ -49,7 +62,12 @@ export default async function Home() {
                 <span className="text-3xl">
                   {((g.style as { emoji?: string })?.emoji as string) ?? "🃏"}
                 </span>
-                <span className="flex-1 font-semibold">{resolveText(g.title, locale)}</span>
+                <span className="flex flex-1 flex-col">
+                  <span className="font-semibold">{resolveText(g.title, locale)}</span>
+                  <span className="text-xs text-muted">
+                    {t("levels.count", { levels: g.config.levels })}
+                  </span>
+                </span>
                 <ChevronRight size={18} className="text-muted" />
               </Link>
             ))}

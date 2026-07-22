@@ -5,6 +5,27 @@ import { PRESETS } from "@/lib/ingest/presets";
 export const maxDuration = 300; // SPARQL + insert can take a while
 
 /**
+ * Vercel Cron (see vercel.json): weekly re-sync of all preset topics —
+ * picks up wiki edits/fixes. Vercel sends `Authorization: Bearer CRON_SECRET`.
+ */
+export async function GET(req: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const results: Record<string, string> = {};
+  for (const key of Object.keys(PRESETS)) {
+    try {
+      const r = await runImport(key);
+      results[key] = `ok: ${r.accepted}`;
+    } catch (err) {
+      results[key] = `failed: ${String(err).slice(0, 120)}`;
+    }
+  }
+  return NextResponse.json({ ok: true, results });
+}
+
+/**
  * Trigger a preset import:
  *   curl -X POST /api/admin/import -H "x-admin-secret: …" -d '{"preset":"countries"}'
  * Temporary guard via ADMIN_TASK_SECRET until the admin UI (role-based) lands.

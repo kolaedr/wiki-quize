@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SwRegister } from "@/components/sw-register";
 // Self-hosted variable fonts (no runtime Google Fonts dependency)
 import "@fontsource-variable/manrope"; // includes latin + cyrillic subsets
 import "@fontsource-variable/space-grotesk";
@@ -40,6 +41,7 @@ export default async function RootLayout({
           <NextIntlClientProvider messages={messages}>
             <div className="mystic-bg" aria-hidden />
             <div className="app-shell">{children}</div>
+            <SwRegister />
           </NextIntlClientProvider>
         </ThemeProvider>
       </body>
