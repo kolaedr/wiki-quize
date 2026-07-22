@@ -1,0 +1,17 @@
+{
+  "app": {
+    "name": "WikiQuize",
+    "tagline": "Swipe through everything humanity knows",
+    "description": "Fast quiz decks built from live Wikipedia data. Flags, arms, languages, cars — and anything the community creates."
+  },
+  "home": {
+    "playSoon": "First decks coming soon",
+    "catalog": "Catalog",
+    "daily": "Daily deck"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  }
+}

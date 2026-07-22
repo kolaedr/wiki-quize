@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens ─────────────────────────────────────────────
+   Aesthetic: "modern mystic" — deep night sky, violet aurora,
+   soft glow accents. Dark is the hero theme; light is warm paper
+   with the same violet soul. Switched via next-themes (class).   */
+
+:root {
+  --font-body: "Manrope Variable";
+  --font-display: "Space Grotesk Variable";
+
+  --bg: #f6f4fb;
+  --bg-deep: #efecf8;
+  --surface: #ffffff;
+  --card: rgba(255, 255, 255, 0.72);
+  --border-c: rgba(80, 62, 140, 0.14);
+  --fg: #1d1733;
+  --muted: #6d6590;
+  --accent: #6d4aff;
+  --accent-soft: rgba(109, 74, 255, 0.12);
+  --accent-2: #0f9d8f;
+  --glow: rgba(109, 74, 255, 0.25);
+  --danger: #d43d63;
+  --success: #189e6c;
+}
+
+.dark {
+  --bg: #0a0913;
+  --bg-deep: #06050c;
+  --surface: #14111f;
+  --card: rgba(24, 20, 38, 0.72);
+  --border-c: rgba(158, 134, 255, 0.14);
+  --fg: #ece9f8;
+  --muted: #8d86ab;
+  --accent: #9b7bff;
+  --accent-soft: rgba(155, 123, 255, 0.14);
+  --accent-2: #2dd4bf;
+  --glow: rgba(139, 104, 255, 0.35);
+  --danger: #ff5c7f;
+  --success: #34d399;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-deep: var(--bg-deep);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-line: var(--border-c);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-2: var(--accent-2);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), var(--font-body), ui-sans-serif;
+  --shadow-glow: 0 0 40px var(--glow);
+}
+
+/* ── App shell: one viewport, no accidental scroll ──────────── */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* The game screen locks to the visual viewport; scrolling exists
+   only inside explicitly scrollable regions (catalog, settings). */
+.app-shell {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── Mystic backdrop: aurora + faint stars ──────────────────── */
+
+.mystic-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, var(--accent-soft), transparent 60%),
+    radial-gradient(50rem 36rem at -15% 110%, var(--accent-soft), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+}
+
+.mystic-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, var(--muted) 50%, transparent 51%),
+    radial-gradient(1px 1px at 70% 20%, var(--muted) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 40% 70%, var(--muted) 50%, transparent 51%),
+    radial-gradient(1px 1px at 85% 60%, var(--muted) 50%, transparent 51%),
+    radial-gradient(1px 1px at 10% 85%, var(--muted) 50%, transparent 51%);
+  opacity: 0.25;
+}
+
+.dark .mystic-bg::after {
+  opacity: 0.5;
+}
+
+/* Frosted card used across the app */
+.glass-card {
+  background: var(--card);
+  border: 1px solid var(--border-c);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 1.25rem;
+}
