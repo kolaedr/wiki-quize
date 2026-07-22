@@ -5,17 +5,18 @@ import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import type { ChoiceCard } from "@/lib/deck/types";
 import { ResultScreen, StatusBar, StreakBadge } from "./hud";
-import { useGameSession } from "./use-game-session";
+import { useGameSession, type SessionResult } from "./use-game-session";
 
 interface Props {
   title: string;
   cards: ChoiceCard[];
+  onFinish?: (r: SessionResult) => void;
 }
 
 /** Quad layout of the `choice` mechanic: big prompt card + 2×2 tap options. */
-export function GameBoard({ title, cards }: Props) {
+export function GameBoard({ title, cards, onFinish }: Props) {
   const t = useTranslations("game");
-  const s = useGameSession(cards.length);
+  const s = useGameSession(cards.length, onFinish);
   const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => setImgFailed(false), [s.idx]);

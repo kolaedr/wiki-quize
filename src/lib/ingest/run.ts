@@ -1,9 +1,37 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { importJobs, topicEntities, topics } from "@/db/schema";
+import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { ACTIVE_LOCALES } from "@/i18n/locales";
 import { sparqlQuery } from "@/lib/wikidata/sparql";
 import { PRESETS, type RawEntity } from "./presets";
+
+const STARTER_GAMES: Record<
+  string,
+  { slug: string; title: Record<string, string>; answerRole: string; emoji: string }[]
+> = {
+  countries: [
+    {
+      slug: "flags",
+      title: { en: "Flags of the World", uk: "Прапори світу" },
+      answerRole: "flag",
+      emoji: "🚩",
+    },
+    {
+      slug: "coat-of-arms",
+      title: { en: "Coats of Arms", uk: "Герби країн" },
+      answerRole: "arms",
+      emoji: "🛡️",
+    },
+  ],
+  "car-brands": [
+    {
+      slug: "car-logos",
+      title: { en: "Car Logos", uk: "Логотипи авто" },
+      answerRole: "logo",
+      emoji: "🚗",
+    },
+  ],
+};
 
 export interface ValidationReport {
   fetched: number;
@@ -114,8 +142,29 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
 
     await db
       .update(topics)
-      .set({ status: "ready", syncedAt: new Date(), validationReport: report })
+      .set({ status: "published", syncedAt: new Date(), validationReport: report })
       .where(eq(topics.id, topic.id));
+
+    // Auto-create starter games for this preset (published; idempotent by slug).
+    // Games needing labels of RELATED entities (languages, origin countries)
+    // wait for the reference-label enrichment pass — see stage-1 checklist.
+    for (const g of STARTER_GAMES[preset.key] ?? []) {
+      await db
+        .insert(games)
+        .values({
+          slug: g.slug,
+          topicId: topic.id,
+          mechanic: "choice",
+          config: { answerRole: g.answerRole, deckSize: 10 },
+          style: { emoji: g.emoji },
+          title: g.title,
+          status: "published",
+        })
+        .onConflictDoUpdate({
+          target: games.slug,
+          set: { topicId: topic.id, status: "published" },
+        });
+    }
     await db
       .update(importJobs)
       .set({

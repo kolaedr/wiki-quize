@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { LogOut } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 
 /** Header account chip: sign-in link for guests, name + sign-out for users. */
@@ -34,9 +35,7 @@ export function UserButton() {
         title={t("signout")}
         className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:text-danger"
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9" />
-        </svg>
+        <LogOut size={15} />
       </button>
     </div>
   );

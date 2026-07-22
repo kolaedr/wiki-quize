@@ -1,12 +1,27 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export const FEEDBACK_MS = 1200;
 const LIVES = 3;
 
+export interface AnswerLog {
+  key: string;
+  correct: boolean;
+}
+
+export interface SessionResult {
+  score: number;
+  best: number;
+  lives: number;
+  answers: AnswerLog[];
+}
+
 /** Shared session state for all mechanics: lives, streak multiplier, score, advance timing. */
-export function useGameSession(totalCards: number) {
+export function useGameSession(
+  totalCards: number,
+  onFinish?: (r: SessionResult) => void,
+) {
   const [idx, setIdx] = useState(0);
   const [lives, setLives] = useState(LIVES);
   const [streak, setStreak] = useState(0);
@@ -14,13 +29,24 @@ export function useGameSession(totalCards: number) {
   const [score, setScore] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [over, setOver] = useState(false);
+  const answersRef = useRef<AnswerLog[]>([]);
+  const reportedRef = useRef(false);
 
   const done = over || idx >= totalCards;
+
+  // Report the finished session exactly once (games in the DB get persisted)
+  useEffect(() => {
+    if (done && !reportedRef.current && answersRef.current.length > 0) {
+      reportedRef.current = true;
+      onFinish?.({ score, best, lives, answers: answersRef.current });
+    }
+  }, [done, score, best, lives, onFinish]);
 
   const answer = useCallback(
     (key: string, correct: boolean) => {
       if (picked || done) return false;
       setPicked(key);
+      answersRef.current.push({ key, correct });
       let willEnd = false;
       if (correct) {
         const s = streak + 1;
@@ -52,6 +78,8 @@ export function useGameSession(totalCards: number) {
     setScore(0);
     setPicked(null);
     setOver(false);
+    answersRef.current = [];
+    reportedRef.current = false;
   }, []);
 
   return { idx, lives, maxLives: LIVES, streak, best, score, picked, done, answer, restart };

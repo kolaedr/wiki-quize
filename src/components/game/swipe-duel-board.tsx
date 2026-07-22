@@ -12,7 +12,7 @@ import { useTranslations } from "next-intl";
 import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
 import { ResultScreen, StatusBar, StreakBadge } from "./hud";
-import { useGameSession } from "./use-game-session";
+import { useGameSession, type SessionResult } from "./use-game-session";
 
 const SWIPE_THRESHOLD = 80;
 
@@ -20,6 +20,7 @@ interface Props {
   title: string;
   /** Cards built with optionCount: 2 — prompt on top, a pair of cards "in hand". */
   cards: ChoiceCard[];
+  onFinish?: (r: SessionResult) => void;
 }
 
 /**
@@ -27,9 +28,9 @@ interface Props {
  * slightly overlapping). Touch devices: fling the pair toward the answer.
  * Mouse: hover lifts a card, click picks it. Keyboard: ← →.
  */
-export function SwipeDuelBoard({ title, cards }: Props) {
+export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
   const t = useTranslations("game");
-  const s = useGameSession(cards.length);
+  const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
   const x = useMotionValue(0);
 

@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
+import { Flame, Heart, RotateCcw, Sparkles, MoonStar } from "lucide-react";
 
 /** Shared HUD bits for all game boards: status row, progress, streak, result screen. */
 
@@ -26,11 +27,15 @@ export function StatusBar({
           <span className="text-muted">
             {Math.min(idx + 1, total)}/{total}
           </span>
-          <span className="tracking-widest">
+          <span className="flex items-center gap-1">
             {Array.from({ length: maxLives }, (_, i) => (
-              <span key={i} className={i < lives ? "text-danger" : "text-muted opacity-30"}>
-                ♥
-              </span>
+              <Heart
+                key={i}
+                size={15}
+                className={
+                  i < lives ? "fill-danger text-danger" : "fill-none text-muted opacity-40"
+                }
+              />
             ))}
           </span>
         </div>
@@ -54,9 +59,10 @@ export function StreakBadge({ streak }: { streak: number }) {
           key={streak}
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="text-accent-2"
+          className="flex items-center gap-1 text-accent-2"
         >
-          🔥 {t("streak")} ×{streak}
+          <Flame size={14} className="fill-accent-2 text-accent-2" />
+          {t("streak")} ×{streak}
         </motion.span>
       )}
     </div>
@@ -78,7 +84,11 @@ export function ResultScreen({
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
       <div className="glass-card shadow-glow flex w-full max-w-sm flex-col items-center gap-3 p-8">
-        <span className="text-5xl">{lives > 0 ? "✨" : "💫"}</span>
+        {lives > 0 ? (
+          <Sparkles size={44} className="text-accent" />
+        ) : (
+          <MoonStar size={44} className="text-muted" />
+        )}
         <h2 className="font-display text-2xl font-bold">{t("result")}</h2>
         <p className="text-4xl font-bold text-accent">{score}</p>
         <p className="text-sm text-muted">
@@ -86,8 +96,9 @@ export function ResultScreen({
         </p>
         <button
           onClick={onRestart}
-          className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white active:scale-95"
+          className="mt-2 flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white active:scale-95"
         >
+          <RotateCcw size={15} />
           {t("playAgain")}
         </button>
       </div>
