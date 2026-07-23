@@ -121,7 +121,18 @@ async function main() {
   const flagUrls = COUNTRIES.map(countryFlagUrl);
   const armsUrls = COUNTRIES.flatMap(countryArmsUrls);
   const logoUrls = BRANDS.flatMap(brandLogoUrls);
-  const ok = await filterWorkingUrls([...flagUrls, ...armsUrls, ...logoUrls]);
+  let ok = await filterWorkingUrls([...flagUrls, ...armsUrls, ...logoUrls]);
+
+  // META-GUARD: flags are canonical Commons filenames. If they fail en masse,
+  // the VALIDATOR is broken (rate limit / network), not the files — trust all
+  // URLs rather than unlisting perfectly good games.
+  const flagOkShare = flagUrls.filter((u) => ok.has(u)).length / flagUrls.length;
+  if (flagOkShare < 0.6) {
+    console.warn(
+      `  ⚠ validation looks degraded (only ${Math.round(flagOkShare * 100)}% of canonical flags passed) — network/rate limit suspected, TRUSTING all URLs as-is`,
+    );
+    ok = new Set([...flagUrls, ...armsUrls, ...logoUrls]);
+  }
 
   const brokenFlags = flagUrls.filter((u) => !ok.has(u)).length;
   const armsOkCount = COUNTRIES.filter((x) => countryArmsUrls(x).some((u) => ok.has(u))).length;

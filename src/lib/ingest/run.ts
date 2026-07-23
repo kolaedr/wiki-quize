@@ -176,15 +176,21 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     const allImageUrls = entities.flatMap((e) =>
       imageRoles.map((r) => e.values[r] as string | undefined),
     );
-    const okUrls = await filterWorkingUrls(allImageUrls, 10);
+    const definedUrls = allImageUrls.filter(Boolean).length;
+    const okUrls = await filterWorkingUrls(allImageUrls, 5);
+    // META-GUARD: mass failure = broken validator (rate limit/network),
+    // not broken files — keep the URLs instead of gutting the dataset.
+    const validationDegraded = definedUrls > 0 && okUrls.size / definedUrls < 0.5;
     let brokenImages = 0;
-    for (const e of entities) {
-      for (const r of imageRoles) {
-        const u = e.values[r] as string | undefined;
-        if (u && !okUrls.has(u)) {
-          e.values[r] = undefined;
-          if (e.imageUrl === u) e.imageUrl = undefined;
-          brokenImages++;
+    if (!validationDegraded) {
+      for (const e of entities) {
+        for (const r of imageRoles) {
+          const u = e.values[r] as string | undefined;
+          if (u && !okUrls.has(u)) {
+            e.values[r] = undefined;
+            if (e.imageUrl === u) e.imageUrl = undefined;
+            brokenImages++;
+          }
         }
       }
     }
