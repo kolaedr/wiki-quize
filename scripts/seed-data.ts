@@ -206,3 +206,68 @@ export const BRANDS: SeedBrand[] = [
 
 export const commonsUrl = flag;
 export const brandLogoUrls = (x: SeedBrand) => x.logoCandidates.map(flag);
+
+// ── Car models (brand ↔ model games; the chief tester's request) ─
+export interface SeedModel {
+  id: string; // pseudo-qid for seeds; live import replaces with real QIDs
+  name: string;
+  brand: SeedBrand;
+  year: number;
+}
+
+const brandByName = new Map(BRANDS.map((b) => [b.name, b]));
+const m = (name: string, brandName: string, year: number): SeedModel => ({
+  id: `MDL-${brandName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${name.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+  name,
+  brand: brandByName.get(brandName)!,
+  year,
+});
+
+/** Ordered famous → less famous. */
+export const MODELS: SeedModel[] = [
+  m("Golf", "Volkswagen", 1974),
+  m("Corolla", "Toyota", 1966),
+  m("911", "Porsche", 1964),
+  m("Mustang", "Ford", 1964),
+  m("Civic", "Honda", 1972),
+  m("Passat", "Volkswagen", 1973),
+  m("Camry", "Toyota", 1982),
+  m("Model 3", "Tesla", 2017),
+  m("A6", "Audi", 1994),
+  m("X5", "BMW", 1999),
+  m("G-Class", "Mercedes-Benz", 1979),
+  m("Land Cruiser", "Toyota", 1951),
+  m("Model S", "Tesla", 2012),
+  m("F-150", "Ford", 1975),
+  m("E-Class", "Mercedes-Benz", 1993),
+  m("M3", "BMW", 1986),
+  m("Cayenne", "Porsche", 2002),
+  m("Octavia", "Škoda", 1996),
+  m("Accord", "Honda", 1976),
+  m("Tiguan", "Volkswagen", 2007),
+  m("Q7", "Audi", 2005),
+  m("Sienna", "Toyota", 1997),
+  m("GT-R", "Nissan", 2007),
+  m("Focus", "Ford", 1998),
+  m("Clio", "Renault", 1990),
+  m("TT", "Audi", 1998),
+  m("Panamera", "Porsche", 2009),
+  m("CR-V", "Honda", 1995),
+  m("Qashqai", "Nissan", 2006),
+  m("Leaf", "Nissan", 2010),
+  m("i3", "BMW", 2013),
+  m("GLE", "Mercedes-Benz", 2015),
+  m("Model X", "Tesla", 2015),
+  m("Fabia", "Škoda", 1999),
+  m("Superb", "Škoda", 2001),
+  m("Megane", "Renault", 1995),
+  m("Twingo", "Renault", 1992),
+  m("Corvette", "Chevrolet", 1953),
+  m("Camaro", "Chevrolet", 1966),
+  m("Wrangler", "Jeep", 1986),
+];
+
+export const modelBrandRef = (x: SeedModel): Ref => ({
+  qid: x.brand.qid,
+  labels: { en: x.brand.name, uk: x.brand.name },
+});

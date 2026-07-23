@@ -19,10 +19,12 @@ import { filterWorkingUrls } from "../src/lib/validate-urls";
 import {
   BRANDS,
   COUNTRIES,
+  MODELS,
   brandLogoUrls,
   countryArmsUrls,
   countryFlagUrl,
   countryRef,
+  modelBrandRef,
 } from "./seed-data";
 
 const url = process.env.DATABASE_URL;
@@ -226,6 +228,36 @@ async function main() {
     console.log(`  no working logo for: ${missing.join(", ")} — excluded from logo games`);
   }
 
+  // ── Car models (brand ↔ model, multi-level — the chief tester's game) ──
+  console.log("Seeding topic: car-models…");
+  const modelsTopic = await upsertTopic(
+    "car-models",
+    { en: "Car models", uk: "Моделі авто" },
+    "car",
+    [
+      { role: "photo", kind: "image", wikidataProp: "P18" },
+      { role: "brand", kind: "entityRefList", wikidataProp: "P176" },
+      { role: "year", kind: "number", wikidataProp: "P571" },
+    ],
+  );
+  await db.delete(topicEntities).where(eq(topicEntities.topicId, modelsTopic.id));
+  const nM = MODELS.length;
+  await db.insert(topicEntities).values(
+    MODELS.map((x, i) => ({
+      topicId: modelsTopic.id,
+      wikidataQid: x.id,
+      labels: { en: x.name, uk: x.name },
+      values: {
+        brand: [modelBrandRef(x)],
+        year: x.year,
+      },
+      wikiLinks: { en: `https://en.wikipedia.org/wiki/${x.brand.name.replaceAll(" ", "_")}_${x.name.replaceAll(" ", "_")}` },
+      sitelinks: 180 - i,
+      difficultyScore: nM > 1 ? 1 - i / (nM - 1) : 1,
+    })),
+  );
+  console.log(`  ${nM} models across ${new Set(MODELS.map((x) => x.brand.name)).size} brands`);
+
   // ── Games (the user's starter list + mechanic showcases) ─────
   console.log("Seeding games…");
   const ct = countriesTopic.id;
@@ -238,6 +270,10 @@ async function main() {
   await upsertGame({ slug: "car-origin", topicId: bt, mechanic: "choice", icon: "globe", title: { en: "Car Brand Origins", uk: "Звідки бренд авто" }, config: { refRole: "originCountries", promptImageRole: "logo", singleTmpl: "brandFrom" }, itemCount: nB });
   await upsertGame({ slug: "population-duel", topicId: ct, mechanic: "higher_lower", icon: "users", title: { en: "Higher: Population", uk: "Більше: населення" }, config: { valueRole: "population", tmpl: "morePopulation", imageRole: "flag" }, itemCount: nC });
   await upsertGame({ slug: "true-false-countries", topicId: ct, mechanic: "swipe_binary", icon: "scale", title: { en: "True or False: Countries", uk: "Правда чи ні: країни" }, config: { roles: [{ role: "population", tmpl: "popHigher" }, { role: "area", tmpl: "areaHigher" }] }, itemCount: nC });
+  const mt = modelsTopic.id;
+  await upsertGame({ slug: "car-model-brand", topicId: mt, mechanic: "choice", icon: "car", title: { en: "Model → Brand", uk: "Модель → Марка" }, config: { refRole: "brand" }, itemCount: nM });
+  await upsertGame({ slug: "car-brand-model", topicId: mt, mechanic: "choice", icon: "car", title: { en: "Whose model is it?", uk: "Чия це модель?" }, config: { refRole: "brand", refDirection: "parent" }, itemCount: nM });
+  await upsertGame({ slug: "car-models-age", topicId: mt, mechanic: "swipe_binary", icon: "scale", title: { en: "True or False: model age", uk: "Правда чи ні: вік моделей" }, config: { roles: [{ role: "year", tmpl: "newerThan" }] }, itemCount: nM });
 
   console.log("Done. Open / — the catalog should show 7 games.");
 }

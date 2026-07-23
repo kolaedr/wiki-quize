@@ -39,7 +39,10 @@
       "isArms": "This is the coat of arms of {a}",
       "isLogo": "This is the logo of {a}",
       "langOf": "{b} is an official language of {a}",
-      "brandFrom": "{a} is a brand from {b}"
+      "brandFrom": "{a} is a brand from {b}",
+      "isThis": "This is {a}",
+      "moreValue": "Which one has the higher value?",
+      "newerThan": "{a} is more recent than {b}"
     },
     "result": "Deck finished",
     "bestStreak": "Best streak",

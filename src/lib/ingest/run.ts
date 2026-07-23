@@ -3,7 +3,13 @@ import { db } from "@/db";
 import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { ACTIVE_LOCALES } from "@/i18n/locales";
 import { filterWorkingUrls } from "@/lib/validate-urls";
-import { sparqlQuery } from "@/lib/wikidata/sparql";
+import { qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
+import {
+  autoGamesFor,
+  buildTopicQuery,
+  normalizeDefRow,
+  type TopicDef,
+} from "./def";
 import { PRESETS, type RawEntity } from "./presets";
 
 export interface StarterGame {
@@ -107,21 +113,39 @@ export interface ValidationReport {
  */
 export async function runImport(presetKey: string): Promise<ValidationReport> {
   const preset = PRESETS[presetKey];
-  if (!preset) throw new Error(`Unknown preset: ${presetKey}`);
+  // Not a code preset? Then it must be a NO-CODE topic: definition lives in DB.
+  let def: TopicDef | null = null;
+  if (!preset) {
+    const [t] = await db.select().from(topics).where(eq(topics.slug, presetKey)).limit(1);
+    def = ((t?.sourceConfig as { def?: TopicDef } | null)?.def as TopicDef) ?? null;
+    if (!def) throw new Error(`Unknown preset/topic: ${presetKey}`);
+  }
+
+  const slug = preset?.slug ?? def!.slug;
+  const title = preset?.title ?? def!.title;
+  const icon = preset?.icon ?? def!.icon;
+  const fieldSchema =
+    preset?.fieldSchema ??
+    def!.fields.map((f) => ({ role: f.role, kind: f.kind, wikidataProp: f.prop }));
+  const requiredRoles =
+    preset?.requiredRoles ?? def!.fields.filter((f) => f.required).map((f) => f.role);
+  const sourceConfig = preset
+    ? { preset: preset.key, icon }
+    : { def: def!, icon };
 
   // Upsert the topic shell; DO NOT touch the status of an existing topic.
   const [topic] = await db
     .insert(topics)
     .values({
-      slug: preset.slug,
-      title: preset.title,
-      sourceConfig: { preset: preset.key, icon: preset.icon },
-      fieldSchema: preset.fieldSchema,
+      slug,
+      title,
+      sourceConfig,
+      fieldSchema,
       status: "syncing", // first-ever import only (row didn't exist yet)
     })
     .onConflictDoUpdate({
       target: topics.slug,
-      set: { sourceConfig: { preset: preset.key, icon: preset.icon } },
+      set: { sourceConfig },
     })
     .returning();
 
@@ -138,7 +162,9 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     .returning();
 
   try {
-    const rows = await sparqlQuery(preset.query);
+    const rows = await sparqlQuery(
+      preset ? preset.query : buildTopicQuery(def!, ACTIVE_LOCALES),
+    );
 
     let droppedNoLabels = 0;
     let droppedMissingRequired = 0;
@@ -146,7 +172,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     const entities: RawEntity[] = [];
 
     for (const row of rows) {
-      const e = preset.normalize(row);
+      const e = preset ? preset.normalize(row) : normalizeDefRow(def!, row, ACTIVE_LOCALES);
       if (!e || seen.has(e.qid)) continue;
       seen.add(e.qid);
 
@@ -156,7 +182,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
         continue;
       }
       // Quality filter 2: mechanic-required fields present
-      const missing = preset.requiredRoles.some((r) => {
+      const missing = requiredRoles.some((r) => {
         const v = e.values[r];
         return v == null || (Array.isArray(v) && v.length === 0);
       });
@@ -167,12 +193,18 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
       entities.push(e);
     }
 
+    // NEW: entityRef enrichment — convert bare QIDs into {qid, labels} via a
+    // VALUES label query, so relation games work on LIVE data too.
+    await enrichRefs(
+      entities,
+      fieldSchema.filter((f) => f.kind === "entityRefList").map((f) => f.role),
+      ACTIVE_LOCALES,
+    );
+
     // Quality filter 3: image URL availability — no fake/broken images in games.
     // Checks every image-kind field value; broken URLs are dropped from the
     // entity, and entities that lose a REQUIRED image role are dropped fully.
-    const imageRoles = preset.fieldSchema
-      .filter((f) => f.kind === "image")
-      .map((f) => f.role);
+    const imageRoles = fieldSchema.filter((f) => f.kind === "image").map((f) => f.role);
     const allImageUrls = entities.flatMap((e) =>
       imageRoles.map((r) => e.values[r] as string | undefined),
     );
@@ -196,7 +228,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     }
     const validated = entities.filter(
       (e) =>
-        !preset.requiredRoles.some((r) => {
+        !requiredRoles.some((r) => {
           const v = e.values[r];
           return v == null || (Array.isArray(v) && v.length === 0);
         }),
@@ -260,7 +292,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
       );
 
     const fieldCoverage: Record<string, number> = {};
-    for (const f of preset.fieldSchema) {
+    for (const f of fieldSchema) {
       fieldCoverage[f.role] = entities.filter((e) => {
         const v = e.values[f.role];
         return v != null && (!Array.isArray(v) || v.length > 0);
@@ -289,7 +321,8 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     // wait for the reference-label enrichment pass — see stage-1 checklist.
     const PER_LEVEL = 20;
     const MIN_PUBLISHABLE_ITEMS = 8;
-    for (const g of STARTER_GAMES[preset.key] ?? []) {
+    const gamesSpec = preset ? (STARTER_GAMES[preset.key] ?? []) : autoGamesFor(def!);
+    for (const g of gamesSpec) {
       const withRole = g.countRole
         ? entities.filter((e) => {
             const v = e.values[g.countRole!];
@@ -355,4 +388,59 @@ export async function failStaleJobs() {
         lt(importJobs.startedAt, new Date(Date.now() - 15 * 60_000)),
       ),
     );
+}
+
+
+/** Fetch labels for referenced QIDs and inflate string refs into {qid, labels}. */
+async function enrichRefs(
+  entities: RawEntity[],
+  refRoles: string[],
+  locales: readonly string[],
+) {
+  if (refRoles.length === 0) return;
+  const qids = new Set<string>();
+  for (const e of entities) {
+    for (const r of refRoles) {
+      const v = e.values[r];
+      if (Array.isArray(v)) for (const x of v) if (typeof x === "string") qids.add(x);
+    }
+  }
+  if (qids.size === 0) return;
+
+  const labelMap = new Map<string, Record<string, string>>();
+  const all = [...qids];
+  for (let i = 0; i < all.length; i += 150) {
+    const chunk = all.slice(i, i + 150);
+    const q = `SELECT ?item ${locales.map((l) => `?l_${l}`).join(" ")} WHERE {
+  VALUES ?item { ${chunk.map((x) => `wd:${x}`).join(" ")} }
+  ${locales.map((l) => `OPTIONAL { ?item rdfs:label ?l_${l} . FILTER(LANG(?l_${l}) = "${l}") }`).join("\n  ")}
+}`;
+    const rows = await sparqlQuery(q);
+    for (const row of rows) {
+      const qid = qidFromUri(row.item?.value ?? "");
+      const labels: Record<string, string> = {};
+      for (const l of locales) {
+        const v = row[`l_${l}`]?.value;
+        if (v) labels[l] = v;
+      }
+      if (labels.en) labelMap.set(qid, labels);
+    }
+  }
+
+  for (const e of entities) {
+    for (const r of refRoles) {
+      const v = e.values[r];
+      if (Array.isArray(v)) {
+        e.values[r] = v
+          .map((x) =>
+            typeof x === "string"
+              ? labelMap.has(x)
+                ? { qid: x, labels: labelMap.get(x)! }
+                : null
+              : x,
+          )
+          .filter(Boolean);
+      }
+    }
+  }
 }

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { PlayScreen } from "@/components/game/play-screen";
 import { resolveText } from "@/i18n/locales";
+import { getAdminSession } from "@/lib/admin/guard";
 import { loadGameDecks } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic"; // deck seed varies per day
@@ -22,6 +23,10 @@ export default async function GameLevelPage({
   let decks;
   try {
     decks = await loadGameDecks(slug, locale, seed, level);
+    // admins can preview unlisted games
+    if (!decks && (await getAdminSession())) {
+      decks = await loadGameDecks(slug, locale, seed, level, true);
+    }
   } catch {
     decks = null;
   }

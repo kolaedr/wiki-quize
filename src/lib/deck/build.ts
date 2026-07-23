@@ -408,3 +408,76 @@ export function buildSingleRefDeck(
   }
   return cards;
 }
+
+/**
+ * REVERSE relation deck ("Whose model is it?"): the prompt is the PARENT
+ * ref (e.g. brand "Audi"), options are child entities (models) — exactly one
+ * belongs to the parent. Distractors are entities NOT related to it.
+ */
+export function buildRefParentDeck(
+  entities: DeckEntity[],
+  opts: {
+    seed: string;
+    locale: string;
+    refRole: string;
+    deckSize?: number;
+    optionCount?: number;
+    questions?: DeckEntity[];
+  },
+): ChoiceCard[] {
+  const { seed, locale, refRole, deckSize = 10, optionCount = 4 } = opts;
+  const rnd = rngFromSeed(seed);
+
+  const pool = entities.filter((e) => refsOf(e, refRole).length > 0);
+  if (pool.length < optionCount) return [];
+  const label = (e: DeckEntity) => e.labels[locale] ?? e.labels.en ?? e.qid;
+  const refLabel = (r: EntityRef) => r.labels[locale] ?? r.labels.en ?? r.qid;
+
+  // group entities by parent ref
+  const groups = new Map<string, { ref: EntityRef; members: DeckEntity[] }>();
+  for (const e of pool) {
+    for (const r of refsOf(e, refRole)) {
+      const g = groups.get(r.qid) ?? { ref: r, members: [] };
+      g.members.push(e);
+      groups.set(r.qid, g);
+    }
+  }
+
+  // prefer questions from the level slice: parents that own sliced entities first
+  const sliceQids = new Set((opts.questions ?? pool).map((e) => e.qid));
+  const ordered = shuffle([...groups.values()], rnd).sort(
+    (a, b) =>
+      Number(b.members.some((m) => sliceQids.has(m.qid))) -
+      Number(a.members.some((m) => sliceQids.has(m.qid))),
+  );
+
+  const cards: ChoiceCard[] = [];
+  for (const g of ordered) {
+    if (cards.length >= deckSize) break;
+    const inSlice = g.members.filter((m) => sliceQids.has(m.qid));
+    const memberPool = inSlice.length > 0 ? inSlice : g.members;
+    const correct = memberPool[Math.floor(rnd() * memberPool.length)];
+
+    // distractors: entities NOT belonging to this parent
+    const distractors = shuffle(
+      pool.filter((e) => !refsOf(e, refRole).some((r) => r.qid === g.ref.qid)),
+      rnd,
+    ).slice(0, optionCount - 1);
+    if (distractors.length < optionCount - 1) continue;
+
+    cards.push({
+      id: `${g.ref.qid}-${cards.length}`,
+      mechanic: "choice",
+      prompt: { label: refLabel(g.ref) },
+      options: shuffle(
+        [correct, ...distractors].map((e) => ({ key: e.qid, label: label(e) })),
+        rnd,
+      ),
+      correctKey: correct.qid,
+      explain: {
+        wikiUrl: correct.wikiLinks?.[locale] ?? correct.wikiLinks?.en ?? undefined,
+      },
+    });
+  }
+  return cards;
+}

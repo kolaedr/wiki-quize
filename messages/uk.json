@@ -39,7 +39,10 @@
       "isArms": "Це герб {a}",
       "isLogo": "Це логотип {a}",
       "langOf": "{b} — офіційна мова {a}",
-      "brandFrom": "{a} — бренд з {b}"
+      "brandFrom": "{a} — бренд з {b}",
+      "isThis": "Це {a}",
+      "moreValue": "Де значення більше?",
+      "newerThan": "{a} новіша, ніж {b}"
     },
     "result": "Колоду пройдено",
     "bestStreak": "Найкраща серія",

@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { games, topicEntities, topics } from "@/db/schema";
 import type { LocalizedText } from "@/i18n/locales";
@@ -7,6 +7,7 @@ import {
   buildChoiceDeck,
   buildHigherLowerDeck,
   buildRefChoiceDeck,
+  buildRefParentDeck,
   buildSingleAttrDeck,
   buildSingleRefDeck,
   refsOf,
@@ -23,6 +24,8 @@ export interface GameConfig {
   answerRole?: string;
   /** choice over a relation: values[refRole] = [{qid, labels}] */
   refRole?: string;
+  /** "parent" = reverse direction: prompt is the ref (brand), options are entities (models) */
+  refDirection?: "parent";
   promptImageRole?: string;
   /** higher_lower */
   valueRole?: string;
@@ -61,6 +64,7 @@ function parseConfig(raw: unknown): GameConfig {
     levels: c.levels ?? 1,
     answerRole: c.answerRole,
     refRole: c.refRole,
+    refDirection: c.refDirection,
     promptImageRole: c.promptImageRole,
     valueRole: c.valueRole,
     tmpl: c.tmpl,
@@ -71,11 +75,21 @@ function parseConfig(raw: unknown): GameConfig {
   };
 }
 
-export async function loadGameMeta(slug: string): Promise<GameMeta | null> {
+export async function loadGameMeta(
+  slug: string,
+  includeUnlisted = false,
+): Promise<GameMeta | null> {
   const [game] = await db
     .select()
     .from(games)
-    .where(and(eq(games.slug, slug), eq(games.status, "published")))
+    .where(
+      and(
+        eq(games.slug, slug),
+        includeUnlisted
+          ? inArray(games.status, ["published", "unlisted"])
+          : eq(games.status, "published"),
+      ),
+    )
     .limit(1);
   if (!game) return null;
   return {
@@ -99,8 +113,9 @@ export async function loadGameDecks(
   locale: string,
   seed: string,
   level = 1,
+  includeUnlisted = false,
 ): Promise<GameDecks | null> {
-  const meta = await loadGameMeta(slug);
+  const meta = await loadGameMeta(slug, includeUnlisted);
   if (!meta) return null;
   const cfg = meta.config;
 
@@ -176,6 +191,22 @@ export async function loadGameDecks(
 
   // choice — relation variant
   if (cfg.refRole) {
+    if (cfg.refDirection === "parent") {
+      // reverse: prompt = the parent (brand "Audi"), options = its/others' models
+      result.duelCards = buildRefParentDeck(entities, {
+        ...base,
+        seed: `${slug}-L${lvl}-duel-${seed}`,
+        refRole: cfg.refRole,
+        optionCount: 2,
+      });
+      result.quadCards = buildRefParentDeck(entities, {
+        ...base,
+        seed: `${slug}-L${lvl}-quad-${seed}`,
+        refRole: cfg.refRole,
+        optionCount: 4,
+      });
+      return result;
+    }
     result.duelCards = buildRefChoiceDeck(entities, {
       ...base,
       seed: `${slug}-L${lvl}-duel-${seed}`,

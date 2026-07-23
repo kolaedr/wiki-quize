@@ -13,7 +13,11 @@ import { getAdminSession } from "@/lib/admin/guard";
 import { PRESETS } from "@/lib/ingest/presets";
 import { failStaleJobs } from "@/lib/ingest/run";
 import { ActionButton } from "@/components/admin/action-button";
+import { NewTopicForm } from "@/components/admin/new-topic-form";
 import { GameIcon } from "@/components/game-icon";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Play, Rows3 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // imports run inside server actions
@@ -54,17 +58,27 @@ export default async function AdminPage() {
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted">
             <Database size={15} /> Теми
           </h2>
-          {Object.values(PRESETS).map((p) => {
-            const topic = topicBySlug.get(p.slug);
+          {[
+            // DB topics (seeded, imported, no-code) + code presets not imported yet
+            ...topicRows.map((t) => ({
+              slug: t.slug,
+              title: t.title,
+              topic: t,
+              importKey: (t.sourceConfig as { preset?: string })?.preset ?? t.slug,
+            })),
+            ...Object.values(PRESETS)
+              .filter((p) => !topicBySlug.has(p.slug))
+              .map((p) => ({ slug: p.slug, title: p.title, topic: null, importKey: p.key })),
+          ].map(({ slug, title, topic, importKey }) => {
             const report = topic?.validationReport as
               | { accepted?: number; fieldCoverage?: Record<string, number> }
               | null
               | undefined;
             return (
-              <div key={p.key} className="glass-card flex flex-col gap-2 p-4">
+              <div key={slug} className="glass-card flex flex-col gap-2 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold">{resolveText(p.title, "uk")}</p>
+                    <p className="font-semibold">{resolveText(title, "uk")}</p>
                     <p className="text-xs text-muted">
                       {topic
                         ? `${topic.status} · ${countByTopic.get(topic.id) ?? 0} сутностей · синк: ${
@@ -73,10 +87,19 @@ export default async function AdminPage() {
                         : "ще не імпортовано"}
                     </p>
                   </div>
-                  <ActionButton
-                    label={topic ? "Синхронізувати" : "Імпортувати"}
-                    action={importPresetAction.bind(null, p.key)}
-                  />
+                  <div className="flex items-center gap-2">
+                    {topic && (
+                      <Button asChild size="sm" variant="ghost">
+                        <Link href={`/admin/topics/${slug}`}>
+                          <Rows3 size={13} /> Айтеми
+                        </Link>
+                      </Button>
+                    )}
+                    <ActionButton
+                      label={topic ? "Синхронізувати" : "Імпортувати"}
+                      action={importPresetAction.bind(null, importKey)}
+                    />
+                  </div>
                 </div>
                 {report?.fieldCoverage && (
                   <p className="text-[11px] leading-4 text-muted">
@@ -89,6 +112,11 @@ export default async function AdminPage() {
               </div>
             );
           })}
+
+          <h3 className="mt-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
+            Нова тема (no-code: клас Wikidata + поля → ігри автоматично)
+          </h3>
+          <NewTopicForm />
         </section>
 
         {/* Games */}
@@ -110,12 +138,27 @@ export default async function AdminPage() {
                   <GameIcon name={(g.style as { icon?: string })?.icon} size={20} className="h-9 w-9" />
                   <div>
                   <p className="font-semibold">{resolveText(g.title, "uk")}</p>
-                  <p className="text-xs text-muted">
-                    {g.status} · рівнів: {cfg.levels ?? 1} (по {cfg.perLevel ?? 20}) · зіграно:{" "}
-                    {g.playsCount}
+                  <p className="flex items-center gap-2 text-xs text-muted">
+                    <Badge
+                      variant={
+                        g.status === "published"
+                          ? "success"
+                          : g.status === "unlisted"
+                            ? "muted"
+                            : "danger"
+                      }
+                    >
+                      {g.status}
+                    </Badge>
+                    рівнів: {cfg.levels ?? 1} (по {cfg.perLevel ?? 20}) · зіграно: {g.playsCount}
                   </p>
                   </div>
                 </div>
+                <Button asChild size="sm" variant="ghost" title="Прев'ю (працює і для unlisted)">
+                  <Link href={`/play/${g.slug}`}>
+                    <Play size={13} /> Грати
+                  </Link>
+                </Button>
                 <ActionButton
                   variant="ghost"
                   label={g.status === "published" ? "Зняти" : "Опублікувати"}

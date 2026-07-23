@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { LevelMap } from "@/components/game/level-map";
 import { resolveText } from "@/i18n/locales";
+import { getAdminSession } from "@/lib/admin/guard";
 import { loadGameMeta } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,8 @@ export default async function GameLevelsPage({
   let meta;
   try {
     meta = await loadGameMeta(slug);
+    // admins can preview unlisted games (e.g. thin datasets) before publishing
+    if (!meta && (await getAdminSession())) meta = await loadGameMeta(slug, true);
   } catch {
     meta = null;
   }
