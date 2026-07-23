@@ -192,54 +192,73 @@ export interface DiscoveredFields {
   fields: ProbeField[];
 }
 
-/**
- * THE probe fields: which properties are filled across the TOP ~12 items (not
- * just one — so a field most items have but the very top lacks, e.g. coat of
- * arms when the #1 country uses a seal, still shows up). One light query. Image
- * fields carry a thumbnail so flag vs coat of arms is visible at a glance.
- */
-export async function discoverFields(classQids: string[]): Promise<DiscoveredFields> {
-  const SAMPLE = 12;
+/** One entity's filled properties — the proven-fast single-entity query. */
+async function entityProps(qid: string): Promise<ProbeField[]> {
   // NB: the label service names its output ?<var>Label — the property var MUST
   // be ?prop so ?propLabel binds (a ?p would give ?pLabel → blank).
   const rows = await sparqlQuery(`
-SELECT ?prop ?propLabel ?ptype (COUNT(DISTINCT ?item) AS ?cnt) (SAMPLE(?v) AS ?ex) WHERE {
-  {
-    SELECT ?item WHERE {
-      ${classUnion(classQids)}
-      ?item wikibase:sitelinks ?sl .
-      FILTER(?sl >= 10)
-    }
-    ORDER BY DESC(?sl)
-    LIMIT ${SAMPLE}
-  }
-  ?item ?pd ?v .
+SELECT ?prop ?propLabel ?ptype ?v ?vLabel WHERE {
+  wd:${qid} ?pd ?v .
   ?prop wikibase:directClaim ?pd ; wikibase:propertyType ?ptype .
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-}
-GROUP BY ?prop ?propLabel ?ptype
-ORDER BY DESC(?cnt)
-LIMIT 150`);
-
-  const fields: ProbeField[] = [];
+} LIMIT 400`);
+  const seen = new Set<string>();
+  const out: ProbeField[] = [];
   for (const r of rows) {
     const prop = qidFromUri(r.prop?.value ?? "");
-    if (!/^P\d+$/.test(prop)) continue;
+    if (!/^P\d+$/.test(prop) || seen.has(prop)) continue;
+    seen.add(prop);
     const kind = TYPE_TO_KIND[r.ptype?.value ?? ""] ?? null;
-    const ex = r.ex?.value;
-    fields.push({
+    out.push({
       prop,
       label: r.propLabel?.value ?? prop,
       kind,
-      coverage: Math.min(1, Number(r.cnt?.value ?? 0) / SAMPLE),
-      exampleImage: kind === "image" && ex ? commonsThumb(ex, 96) : undefined,
-      example: kind === "number" || kind === "date" ? ex : undefined,
+      coverage: 0,
+      example: kind && kind !== "image" ? (r.vLabel?.value ?? r.v?.value) : undefined,
+      exampleImage: kind === "image" && r.v?.value ? commonsThumb(r.v.value, 96) : undefined,
     });
+  }
+  return out;
+}
+
+/**
+ * Probe fields: union the filled properties of the TOP few items (separate
+ * light queries — no heavy aggregation), so a field most items have but the #1
+ * lacks still shows up. Generic — no per-class special-casing. Image fields
+ * carry a thumbnail; `coverage` = share of sampled items that had the field.
+ */
+export async function discoverFields(classQids: string[]): Promise<DiscoveredFields> {
+  const N = 3;
+  const top = await sparqlQuery(`
+SELECT ?item WHERE {
+  ${classUnion(classQids)}
+  ?item wikibase:sitelinks ?sl .
+}
+ORDER BY DESC(?sl)
+LIMIT ${N}`);
+  const qids = top.map((r) => qidFromUri(r.item?.value ?? "")).filter((q) => QID_RE.test(q));
+  if (qids.length === 0) return { sampleSize: 0, fields: [] };
+
+  const perEntity = await Promise.all(qids.map((q) => entityProps(q)));
+  const agg = new Map<string, ProbeField & { count: number }>();
+  for (const props of perEntity) {
+    for (const p of props) {
+      const cur = agg.get(p.prop);
+      if (cur) {
+        cur.count += 1;
+        cur.example ??= p.example;
+        cur.exampleImage ??= p.exampleImage;
+      } else {
+        agg.set(p.prop, { ...p, count: 1 });
+      }
+    }
   }
   const rank = (k: TopicFieldDef["kind"] | null) =>
     k === "image" ? 0 : k === "date" ? 1 : k === "number" ? 2 : k === "entityRefList" ? 3 : 9;
-  fields.sort((a, b) => rank(a.kind) - rank(b.kind) || b.coverage - a.coverage);
-  return { sampleSize: SAMPLE, fields };
+  const fields = [...agg.values()]
+    .map(({ count, ...f }) => ({ ...f, coverage: count / qids.length }))
+    .sort((a, b) => rank(a.kind) - rank(b.kind) || b.coverage - a.coverage);
+  return { sampleSize: qids.length, fields };
 }
 
 export interface SampleEntity {
