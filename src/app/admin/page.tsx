@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin/actions";
 import { getAdminSession } from "@/lib/admin/guard";
 import { PRESETS } from "@/lib/ingest/presets";
+import { failStaleJobs } from "@/lib/ingest/run";
 import { ActionButton } from "@/components/admin/action-button";
 import { GameIcon } from "@/components/game-icon";
 
@@ -20,6 +21,9 @@ export const maxDuration = 300; // imports run inside server actions
 /** Super-admin panel: topics (import/sync by click), games, jobs. */
 export default async function AdminPage() {
   if (!(await getAdminSession())) redirect("/");
+
+  // Jobs killed by the serverless time limit must not show "running" forever
+  await failStaleJobs().catch(() => {});
 
   const [topicRows, gameRows, jobRows, counts] = await Promise.all([
     db.select().from(topics).catch(() => []),

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, lt, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { ACTIVE_LOCALES } from "@/i18n/locales";
@@ -98,12 +98,18 @@ export interface ValidationReport {
 /**
  * Full import of a preset topic (small topics fit one invocation;
  * chunked/cursor mode is a stage-1 TODO for user-created topics).
+ *
+ * SAFETY RULES (learned in prod):
+ * - a PUBLISHED topic never leaves "published" during a re-sync — the catalog
+ *   must not blink or lose games while a job runs or fails;
+ * - entities are UPSERTED (no delete-all window); stale rows are removed only
+ *   AFTER a successful write, and never if the fetch came back suspiciously small.
  */
 export async function runImport(presetKey: string): Promise<ValidationReport> {
   const preset = PRESETS[presetKey];
   if (!preset) throw new Error(`Unknown preset: ${presetKey}`);
 
-  // Upsert the topic shell first
+  // Upsert the topic shell; DO NOT touch the status of an existing topic.
   const [topic] = await db
     .insert(topics)
     .values({
@@ -111,13 +117,20 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
       title: preset.title,
       sourceConfig: { preset: preset.key, icon: preset.icon },
       fieldSchema: preset.fieldSchema,
-      status: "syncing",
+      status: "syncing", // first-ever import only (row didn't exist yet)
     })
     .onConflictDoUpdate({
       target: topics.slug,
-      set: { status: "syncing" },
+      set: { sourceConfig: { preset: preset.key, icon: preset.icon } },
     })
     .returning();
+
+  // A previous run may have been killed by the serverless time limit —
+  // mark its jobs failed so the admin panel doesn't show them "running" forever.
+  await db
+    .update(importJobs)
+    .set({ status: "failed", finishedAt: new Date(), log: ["superseded by a new run"] })
+    .where(and(eq(importJobs.topicId, topic.id), eq(importJobs.status, "running")));
 
   const [job] = await db
     .insert(importJobs)
@@ -185,27 +198,60 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     entities.length = 0;
     entities.push(...validated);
 
+    // Sanity guard: a suspiciously small result (SPARQL hiccup, endpoint
+    // change) must NOT overwrite a healthy dataset.
+    if (entities.length < 10) {
+      throw new Error(
+        `sanity guard: only ${entities.length} entities passed filters — keeping existing data`,
+      );
+    }
+
     // Difficulty = popularity percentile within the topic (1 = most famous)
     const sorted = [...entities].sort((a, b) => b.sitelinks - a.sitelinks);
     const rank = new Map(sorted.map((e, i) => [e.qid, 1 - i / Math.max(1, sorted.length - 1)]));
 
-    // Replace-all write (presets are small; per-row upsert keeps `excluded` flags — TODO for UGC)
-    await db.delete(topicEntities).where(eq(topicEntities.topicId, topic.id));
+    // UPSERT (no delete-all window): existing rows are updated in place,
+    // `excluded` flags survive; stale rows are removed only after success.
     const CHUNK = 100;
     for (let i = 0; i < entities.length; i += CHUNK) {
-      await db.insert(topicEntities).values(
-        entities.slice(i, i + CHUNK).map((e) => ({
-          topicId: topic.id,
-          wikidataQid: e.qid,
-          labels: e.labels,
-          values: e.values,
-          imageUrl: e.imageUrl,
-          wikiLinks: e.wikiLinks,
-          sitelinks: e.sitelinks,
-          difficultyScore: rank.get(e.qid) ?? 0,
-        })),
-      );
+      await db
+        .insert(topicEntities)
+        .values(
+          entities.slice(i, i + CHUNK).map((e) => ({
+            topicId: topic.id,
+            wikidataQid: e.qid,
+            labels: e.labels,
+            values: e.values,
+            imageUrl: e.imageUrl,
+            wikiLinks: e.wikiLinks,
+            sitelinks: e.sitelinks,
+            difficultyScore: rank.get(e.qid) ?? 0,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [topicEntities.topicId, topicEntities.wikidataQid],
+          set: {
+            labels: sql`excluded.labels`,
+            values: sql`excluded.values`,
+            imageUrl: sql`excluded.image_url`,
+            wikiLinks: sql`excluded.wiki_links`,
+            sitelinks: sql`excluded.sitelinks`,
+            difficultyScore: sql`excluded.difficulty_score`,
+            updatedAt: sql`now()`,
+          },
+        });
     }
+
+    // Remove rows that disappeared from the source — only now, after the
+    // new data is fully written.
+    await db
+      .delete(topicEntities)
+      .where(
+        and(
+          eq(topicEntities.topicId, topic.id),
+          notInArray(topicEntities.wikidataQid, entities.map((e) => e.qid)),
+        ),
+      );
 
     const fieldCoverage: Record<string, number> = {};
     for (const f of preset.fieldSchema) {
@@ -284,7 +330,20 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
         log: sql`${JSON.stringify([String(err)])}::jsonb`,
       })
       .where(eq(importJobs.id, job.id));
-    await db.update(topics).set({ status: "draft" }).where(eq(topics.id, topic.id));
+    // NEVER unpublish on failure — existing data keeps serving the catalog.
     throw err;
   }
+}
+
+/** Housekeeping: any job "running" longer than 15 min was killed → failed. */
+export async function failStaleJobs() {
+  await db
+    .update(importJobs)
+    .set({ status: "failed", finishedAt: new Date(), log: ["stale: exceeded 15min"] })
+    .where(
+      and(
+        eq(importJobs.status, "running"),
+        lt(importJobs.startedAt, new Date(Date.now() - 15 * 60_000)),
+      ),
+    );
 }

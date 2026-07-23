@@ -12,15 +12,23 @@ export async function filterWorkingUrls(
 
   async function check(url: string) {
     try {
-      let res = await fetch(url, { method: "HEAD", redirect: "follow" });
+      let res = await fetch(url, {
+        method: "HEAD",
+        redirect: "follow",
+        signal: AbortSignal.timeout(5_000),
+      });
       // Some proxies reject HEAD — retry with GET and discard the body.
       if (!res.ok && res.status !== 404) {
-        res = await fetch(url, { method: "GET", redirect: "follow" });
+        res = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(5_000),
+        });
       }
       if (res.ok) ok.add(url);
       await res.body?.cancel().catch(() => {});
     } catch {
-      /* unreachable → not ok */
+      /* unreachable / timed out → not ok */
     }
   }
 

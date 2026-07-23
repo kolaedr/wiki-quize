@@ -28,6 +28,8 @@ export async function sparqlQuery(query: string): Promise<SparqlRow[]> {
     },
     body: new URLSearchParams({ query }),
     cache: "no-store",
+    // Fail cleanly instead of hanging until the serverless function is killed
+    signal: AbortSignal.timeout(90_000),
   });
 
   if (!res.ok) {
