@@ -58,6 +58,7 @@ npm run db:studio     # перевірити очима: мають бути top
 | `env pull` приніс тільки `VERCEL_OIDC_TOKEN` | база не підключена до Development → пункт 2.2, або тягни `--environment=production` |
 | У Vercel UI значення змінної не видно / не копіюється | прапорець Sensitive — це норм; бери значення з консолі Neon (пункт 2.3-Б) |
 | `db:migrate` падає по конекту | перевір, що URL містить `sslmode=require`; якщо падає через пулер — у `drizzle.config.ts` підстав `DATABASE_URL_UNPOOLED` |
+| `db:migrate` зависає на «can only connect through a websocket» | `db:migrate` іде через neon-http (`scripts/migrate.ts`), той самий драйвер, що й сіди, а не вебсокет drizzle-kit. Якщо колись треба саме kit-варіант — `npm run db:migrate:kit` (потребує налаштованого `ws`) |
 | Модалка Connect: «already connected…» | база вже прив'язана до частини середовищ → Disconnect і підключи заново на всі три |
 | Auth кидає помилку секрету | не заданий `BETTER_AUTH_SECRET` (мін. 32 символи) |
 | Імпорт відповідає 401 | не збігається `x-admin-secret` з env `ADMIN_TASK_SECRET` |
