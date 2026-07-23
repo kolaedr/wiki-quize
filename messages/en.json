@@ -10,7 +10,13 @@
     "catalog": "Catalog",
     "categories": "Categories",
     "gamesCount": "{count} games",
-    "daily": "Daily deck"
+    "daily": "Daily deck",
+    "heroPlayTitle": "Just play — no sign-up",
+    "heroPlayText": "Pick a category below and start swiping. Quick rounds, real facts from Wikipedia.",
+    "heroPlayCta": "Try a demo",
+    "heroJoinTitle": "Sign up to save progress",
+    "heroJoinText": "Keep your streaks — and start a team to settle who's actually the smartest.",
+    "heroJoinCta": "Create account"
   },
   "me": {
     "played": "Games played",

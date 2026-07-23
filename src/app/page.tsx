@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChevronRight, Globe2, Play } from "lucide-react";
+import { ChevronRight, Globe2, Play, UserPlus } from "lucide-react";
 import { GameIcon } from "@/components/game-icon";
 import { Button } from "@/components/ui/button";
 import { resolveText } from "@/i18n/locales";
+import { auth } from "@/lib/auth";
 import { listCategories } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic"; // categories come from the DB
@@ -12,7 +14,10 @@ export const dynamic = "force-dynamic"; // categories come from the DB
 export default async function Home() {
   const t = await getTranslations();
   const locale = await getLocale();
-  const categories = await listCategories();
+  const [categories, session] = await Promise.all([
+    listCategories(),
+    auth.api.getSession({ headers: await headers() }).catch(() => null),
+  ]);
 
   return (
     <>
@@ -25,6 +30,36 @@ export default async function Home() {
             {t("app.description")}
           </p>
         </div>
+
+        {/* onboarding cards */}
+        <section className="grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/play"
+            className="glass-card flex flex-col gap-2 p-5 transition-all hover:border-accent active:scale-[0.99]"
+          >
+            <span className="flex items-center gap-2 font-display font-semibold">
+              <Play size={16} className="text-accent" /> {t("home.heroPlayTitle")}
+            </span>
+            <span className="text-sm leading-6 text-muted">{t("home.heroPlayText")}</span>
+            <span className="mt-1 flex items-center gap-1 text-sm font-medium text-accent">
+              {t("home.heroPlayCta")} <ChevronRight size={15} />
+            </span>
+          </Link>
+          {!session && (
+            <Link
+              href="/auth"
+              className="glass-card flex flex-col gap-2 p-5 transition-all hover:border-accent active:scale-[0.99]"
+            >
+              <span className="flex items-center gap-2 font-display font-semibold">
+                <UserPlus size={16} className="text-accent" /> {t("home.heroJoinTitle")}
+              </span>
+              <span className="text-sm leading-6 text-muted">{t("home.heroJoinText")}</span>
+              <span className="mt-1 flex items-center gap-1 text-sm font-medium text-accent">
+                {t("home.heroJoinCta")} <ChevronRight size={15} />
+              </span>
+            </Link>
+          )}
+        </section>
 
         {categories.length > 0 ? (
           <section className="flex flex-col gap-3">
