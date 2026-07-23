@@ -97,7 +97,8 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
       setProbe(r);
       setTotal(r.total ?? null);
       if (r.ok && r.sample) {
-        setPicked(new Set(r.sample.fields.filter((f) => f.kind).map((f) => f.prop)));
+        // default: only image fields (name is always pulled); rest is admin's choice
+        setPicked(new Set(r.sample.fields.filter((f) => f.kind === "image").map((f) => f.prop)));
       }
     });
 
@@ -261,14 +262,18 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
           {/* fields = checkboxes from the sample entity */}
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-fg">Які поля тягнути?</span>
-            <div className="max-h-64 overflow-y-auto rounded-lg border border-line/60">
+            <p className="text-[11px] text-muted">
+              Назва тягнеться завжди. Зображення позначені за замовчуванням; решту
+              обирай за потреби. Приклад — реальне значення з «{sample.label}».
+            </p>
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-line/60">
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-bg/90 text-muted backdrop-blur">
                   <tr>
                     <th className="p-2"> </th>
                     <th className="p-2">Поле</th>
                     <th className="p-2">Тип</th>
-                    <th className="p-2">Приклад значення</th>
+                    <th className="p-2">Приклад</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -278,14 +283,26 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
                       onClick={() => p.kind && togglePick(p.prop, !picked.has(p.prop))}
                       className={`border-t border-line/40 ${p.kind ? "cursor-pointer hover:bg-accent-soft/40" : "opacity-40"}`}
                     >
-                      <td className="p-2">
+                      <td className="p-2 align-top">
                         <input type="checkbox" readOnly checked={picked.has(p.prop)} disabled={!p.kind} />
                       </td>
-                      <td className="p-2">
-                        {p.label} <span className="text-muted">({p.prop})</span>
+                      <td className="p-2 align-top">
+                        <span className="font-medium text-fg">{p.label}</span>{" "}
+                        <span className="text-[10px] text-muted">{p.prop}</span>
                       </td>
-                      <td className="p-2">{p.kind ? KIND_UK[p.kind] : "—"}</td>
-                      <td className="max-w-40 truncate p-2 text-muted">{p.example ?? ""}</td>
+                      <td className="p-2 align-top">{p.kind ? KIND_UK[p.kind] : "—"}</td>
+                      <td className="p-2 align-top text-muted">
+                        {p.exampleImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- Commons thumb preview
+                          <img
+                            src={p.exampleImage}
+                            alt=""
+                            className="h-10 w-14 rounded object-contain"
+                          />
+                        ) : (
+                          <span className="block max-w-40 truncate">{p.example ?? ""}</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

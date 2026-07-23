@@ -1,4 +1,4 @@
-import { qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
+import { commonsThumb, qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
 import type { TopicFieldDef } from "./def";
 
 const SEARCH_UA =
@@ -129,6 +129,8 @@ export interface ProbeField {
   kind: TopicFieldDef["kind"] | null;
   /** one example value (label) from the sample entity */
   example?: string;
+  /** for image fields: a thumbnail URL to render inline */
+  exampleImage?: string;
 }
 
 export interface ProbeSample {
@@ -206,27 +208,31 @@ SELECT ?item ?itemLabel ?sl WHERE {
   const qid = qidFromUri(top[0]?.item?.value ?? "");
   if (!QID_RE.test(qid)) return null;
 
+  // NB: the label service names the output ?<var>Label — so the property var
+  // MUST be ?prop for ?propLabel to bind (a previous ?p gave ?pLabel → blank).
   const rows = await sparqlQuery(`
-SELECT ?p ?propLabel ?ptype ?vLabel WHERE {
+SELECT ?prop ?propLabel ?ptype ?v ?vLabel WHERE {
   wd:${qid} ?pd ?v .
-  ?p wikibase:directClaim ?pd ; wikibase:propertyType ?ptype .
+  ?prop wikibase:directClaim ?pd ; wikibase:propertyType ?ptype .
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 } LIMIT 500`);
   const byProp = new Map<string, ProbeField>();
   for (const r of rows) {
-    const prop = qidFromUri(r.p?.value ?? "");
+    const prop = qidFromUri(r.prop?.value ?? "");
     if (!/^P\d+$/.test(prop) || byProp.has(prop)) continue;
+    const kind = TYPE_TO_KIND[r.ptype?.value ?? ""] ?? null;
     byProp.set(prop, {
       prop,
       label: r.propLabel?.value ?? prop,
-      kind: TYPE_TO_KIND[r.ptype?.value ?? ""] ?? null,
+      kind,
       example: r.vLabel?.value,
+      exampleImage: kind === "image" && r.v?.value ? commonsThumb(r.v.value, 96) : undefined,
     });
   }
-  // supported fields first
-  const fields = [...byProp.values()].sort(
-    (a, b) => Number(!!b.kind) - Number(!!a.kind),
-  );
+  // order: images first, then dates, numbers, refs, unsupported last
+  const rank = (k: TopicFieldDef["kind"] | null) =>
+    k === "image" ? 0 : k === "date" ? 1 : k === "number" ? 2 : k === "entityRefList" ? 3 : 9;
+  const fields = [...byProp.values()].sort((a, b) => rank(a.kind) - rank(b.kind));
   return {
     qid,
     label: top[0]?.itemLabel?.value ?? qid,
