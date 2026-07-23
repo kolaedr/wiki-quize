@@ -83,6 +83,40 @@ export async function setGameStatusAction(
   }
 }
 
+/** Rename a game (localized title) — clean up auto-generated names. */
+export async function renameGameAction(
+  gameId: string,
+  titleEn: string,
+  titleUk: string,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (!titleEn.trim()) return { ok: false, message: "Назва (EN) обовʼязкова" };
+  try {
+    await db
+      .update(games)
+      .set({ title: { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) } })
+      .where(eq(games.id, gameId));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "назву збережено" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Delete a game (its play sessions cascade off). */
+export async function deleteGameAction(gameId: string): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    await db.delete(games).where(eq(games.id, gameId));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "гру видалено" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
 
 export interface ClassSearchResult {
   ok: boolean;
