@@ -241,6 +241,9 @@ export function NewTopicForm() {
         </div>
 
         {probe && !probe.ok && <p className="text-xs text-danger">{probe.message}</p>}
+        {probe?.ok && probe.message && (
+          <p className="text-xs text-amber-500">{probe.message}</p>
+        )}
 
         {probe?.ok && probe.distribution && (
           <>

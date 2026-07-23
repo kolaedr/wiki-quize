@@ -111,15 +111,32 @@ export async function probeClassAction(classQidsRaw: string): Promise<ProbeResul
   if (classQids.length === 0 || classQids.some((q) => !/^Q\d+$/.test(q)))
     return { ok: false, message: "Класи мають бути виду Q3231690 (через кому)" };
   try {
-    const [distribution, discovered] = await Promise.all([
+    // Independent so one timed-out sub-query (big class) still returns partial
+    // probe data instead of failing the whole reconnaissance.
+    const [distRes, discRes] = await Promise.allSettled([
       sitelinksDistribution(classQids),
       discoverProperties(classQids),
     ]);
+    const distribution = distRes.status === "fulfilled" ? distRes.value : [];
+    const discovered =
+      discRes.status === "fulfilled" ? discRes.value : { sampleSize: 0, properties: [] };
+
+    if (distRes.status === "rejected" && discRes.status === "rejected")
+      return {
+        ok: false,
+        message:
+          "Клас завеликий — запити впираються в таймаут Wikidata. Обери вужчий клас або підніми поріг sitelinks.",
+      };
+
     // preview a top entity with the supported discovered properties
     const supported = discovered.properties.filter((p) => p.kind).map((p) => p.prop);
     const sample = await sampleEntity(classQids, supported).catch(() => null);
     return {
       ok: true,
+      message:
+        distRes.status === "rejected" || discRes.status === "rejected"
+          ? "Частина розвідки не встигла (клас великий) — показано що вдалось."
+          : undefined,
       distribution,
       sampleSize: discovered.sampleSize,
       properties: discovered.properties,

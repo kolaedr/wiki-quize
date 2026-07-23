@@ -174,9 +174,12 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
       ? await countForClass(def.classQids, def.sitelinksMin).catch(() => undefined)
       : undefined;
 
-    const rows = await sparqlQuery(
-      preset ? preset.query : buildTopicQuery(def!, ACTIVE_LOCALES),
-    );
+    // Preset = one hand-tuned query. Def topic = fetch in sitelinks BANDS so
+    // each request stays small — a single query over a whole class 504s on the
+    // public endpoint (the transitive P279* + GROUP_CONCAT is expensive).
+    const rows = preset
+      ? await sparqlQuery(preset.query)
+      : await fetchDefRows(def!, ACTIVE_LOCALES);
 
     let droppedNoLabels = 0;
     let droppedMissingRequired = 0;
@@ -387,6 +390,39 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     // NEVER unpublish on failure — existing data keeps serving the catalog.
     throw err;
   }
+}
+
+/**
+ * Fetch all rows for a def topic in DESCENDING sitelinks bands. Each band is a
+ * bounded query [floor, ceil) — famous items first — so no single request scans
+ * the whole class and times out. Stops once the def's limit is reached.
+ */
+async function fetchDefRows(
+  def: TopicDef,
+  locales: readonly string[],
+): Promise<Awaited<ReturnType<typeof sparqlQuery>>> {
+  const limit = Math.min(def.limit || 500, 5000);
+  // band boundaries above the topic floor, biggest first
+  const stops = [2000, 800, 300, 150, 80, 50, 35, 25, 18, 12]
+    .filter((t) => t > def.sitelinksMin)
+    .concat(def.sitelinksMin)
+    .sort((a, b) => b - a);
+
+  const rows: Awaited<ReturnType<typeof sparqlQuery>> = [];
+  let ceil: number | undefined = undefined; // open top for the first band
+  for (const floor of stops) {
+    if (rows.length >= limit) break;
+    try {
+      const band = await sparqlQuery(buildTopicQuery(def, locales, { min: floor, maxExclusive: ceil }));
+      rows.push(...band);
+    } catch (err) {
+      // one heavy band timing out must not sink the whole import — skip it,
+      // the other bands still bring data (and the sanity guard covers totals).
+      if (!String(err).includes("504")) throw err;
+    }
+    ceil = floor;
+  }
+  return rows;
 }
 
 /** Housekeeping: any job "running" longer than 15 min was killed → failed. */

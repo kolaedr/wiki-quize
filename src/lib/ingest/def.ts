@@ -51,8 +51,20 @@ export function validateDef(def: TopicDef) {
     throw new Error("sitelinksMin must be >= 0");
 }
 
-/** Generate the SPARQL query for a definition (labels + sitelinks + fields). */
-export function buildTopicQuery(def: TopicDef, locales: readonly string[]): string {
+/**
+ * Generate the SPARQL query for a definition (labels + sitelinks + fields).
+ * `range` restricts sitelinks to a half-open band [min, maxExclusive) so the
+ * import can fetch big classes in BATCHES that each stay under the public
+ * endpoint's ~60s timeout (see fetchDefRows in run.ts).
+ */
+export function buildTopicQuery(
+  def: TopicDef,
+  locales: readonly string[],
+  range?: { min: number; maxExclusive?: number },
+): string {
+  const min = range?.min ?? def.sitelinksMin;
+  const maxClause =
+    range?.maxExclusive != null ? `FILTER(?sitelinks < ${range.maxExclusive})` : "";
   const labelClauses = locales
     .map(
       (l) => `?item rdfs:label ?label_${l} FILTER(LANG(?label_${l}) = "${l}") .
@@ -96,7 +108,8 @@ WHERE {
   ${classUnion}
   ${excludes}
   ?item wikibase:sitelinks ?sitelinks .
-  FILTER(?sitelinks >= ${def.sitelinksMin})
+  FILTER(?sitelinks >= ${min})
+  ${maxClause}
   ${labelClauses}
   ${fieldClauses}
 }

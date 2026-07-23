@@ -70,11 +70,13 @@ function classUnion(classQids: string[]): string {
 export async function sitelinksDistribution(
   classQids: string[],
 ): Promise<{ sitelinks: number; n: number }[]> {
+  // FILTER >= 10: items with almost no sitelinks are noise for these games and
+  // scanning them is what makes this query time out on huge classes.
   const q = `
 SELECT ?sitelinks (COUNT(DISTINCT ?item) AS ?n) WHERE {
   ${classUnion(classQids)}
   ?item wikibase:sitelinks ?sitelinks .
-  FILTER(?sitelinks > 0)
+  FILTER(?sitelinks >= 10)
 }
 GROUP BY ?sitelinks
 ORDER BY DESC(?sitelinks)`;
@@ -133,12 +135,15 @@ export async function discoverProperties(
   sample = 50,
 ): Promise<{ sampleSize: number; properties: ProbeProperty[] }> {
   const n = Math.min(Math.max(sample, 10), 100);
+  // FILTER >= 15 bounds the inner set BEFORE the sort — sorting every instance
+  // of the class by sitelinks is the expensive part that 504s on big classes.
   const q = `
 SELECT ?prop ?propLabel ?ptype (COUNT(DISTINCT ?item) AS ?cnt) WHERE {
   {
     SELECT DISTINCT ?item ?sl WHERE {
       ${classUnion(classQids)}
       ?item wikibase:sitelinks ?sl .
+      FILTER(?sl >= 15)
     }
     ORDER BY DESC(?sl)
     LIMIT ${n}
