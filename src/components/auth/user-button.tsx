@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { LogOut } from "lucide-react";
-import { authClient, useSession } from "@/lib/auth-client";
+import { CircleUserRound } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
 
-/** Header account chip: sign-in link for guests, name + sign-out for users. */
+/** Header account chip: sign-in link for guests, cabinet link for users. */
 export function UserButton() {
   const t = useTranslations("auth");
   const { data: session, isPending } = useSession();
@@ -26,17 +26,13 @@ export function UserButton() {
   }
 
   return (
-    <div className="glass-card flex h-10 items-center gap-2 pl-3 pr-1">
-      <span className="max-w-24 truncate text-sm font-medium">
-        {session.user.name || session.user.email}
-      </span>
-      <button
-        onClick={() => authClient.signOut()}
-        title={t("signout")}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:text-danger"
-      >
-        <LogOut size={15} />
-      </button>
-    </div>
+    <Link
+      href="/me"
+      title={t("cabinet")}
+      className="glass-card flex h-10 items-center gap-2 px-3 text-sm font-medium transition-colors hover:text-accent"
+    >
+      <CircleUserRound size={17} className="text-accent" />
+      <span className="max-w-24 truncate">{session.user.name || session.user.email}</span>
+    </Link>
   );
 }

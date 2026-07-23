@@ -8,7 +8,18 @@
     "playSoon": "First decks coming soon",
     "tryDemo": "Try the demo deck",
     "catalog": "Catalog",
+    "categories": "Categories",
+    "gamesCount": "{count} games",
     "daily": "Daily deck"
+  },
+  "me": {
+    "played": "Games played",
+    "totalScore": "Total score",
+    "rank": "Rank",
+    "bestResults": "Best results",
+    "leaderboard": "Leaderboard",
+    "recent": "Recent games",
+    "noGames": "No finished games yet — go play something!"
   },
   "game": {
     "flagsTitle": "Flags of the World",
@@ -51,6 +62,7 @@
     "signin": "Sign in",
     "signup": "Sign up",
     "signout": "Sign out",
+    "cabinet": "My cabinet",
     "name": "Name",
     "email": "Email",
     "password": "Password (min. 8)",

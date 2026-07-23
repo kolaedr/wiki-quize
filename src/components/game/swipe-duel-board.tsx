@@ -59,18 +59,30 @@ export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
     >
       <StatusBar title={title} idx={s.idx} total={cards.length} lives={s.lives} maxLives={s.maxLives} />
 
-      {/* prompt */}
-      <div className="flex h-24 flex-col items-center justify-center gap-1 text-center">
+      {/* prompt (image + label — e.g. brand logo above the brand name) */}
+      <div
+        className={`flex flex-col items-center justify-center gap-1 text-center ${
+          card.prompt.image ? "h-40" : "h-24"
+        }`}
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={card.id}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex flex-col items-center gap-1"
+            className="flex flex-col items-center gap-2"
           >
+            {card.prompt.image && (
+              // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink
+              <img
+                src={card.prompt.image}
+                alt=""
+                className="max-h-20 max-w-40 object-contain drop-shadow-lg"
+              />
+            )}
             {(card.prompt.label || card.prompt.tmpl) && (
-              <span className="font-display text-3xl font-bold tracking-tight">
+              <span className="font-display text-2xl font-bold tracking-tight">
                 {card.prompt.label ?? t(`tmpl.${card.prompt.tmpl}`, card.prompt.params ?? {})}
               </span>
             )}

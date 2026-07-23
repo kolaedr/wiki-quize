@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { games, topicEntities } from "@/db/schema";
+import { games, topicEntities, topics } from "@/db/schema";
 import type { LocalizedText } from "@/i18n/locales";
 import {
   buildBinaryDeck,
@@ -9,6 +9,7 @@ import {
   buildRefChoiceDeck,
   buildSingleAttrDeck,
   buildSingleRefDeck,
+  refsOf,
 } from "./build";
 import type { BinaryCard, ChoiceCard, DeckEntity } from "./types";
 
@@ -110,7 +111,7 @@ export async function loadGameDecks(
       and(eq(topicEntities.topicId, meta.topicId), eq(topicEntities.excluded, false)),
     );
 
-  const entities: DeckEntity[] = rows
+  const all: DeckEntity[] = rows
     .map((r) => ({
       qid: r.wikidataQid,
       labels: r.labels,
@@ -121,7 +122,26 @@ export async function loadGameDecks(
     }))
     .sort((a, b) => (b.difficultyScore ?? 0) - (a.difficultyScore ?? 0));
 
-  const lvl = Math.min(Math.max(1, level), cfg.levels);
+  // ELIGIBLE entities for THIS game — levels are sliced over these, not over
+  // the whole topic (otherwise a level of famous countries that lost e.g.
+  // their arms image in validation produces an empty deck → 404).
+  let entities: DeckEntity[];
+  if (meta.mechanic === "swipe_binary") {
+    entities = all.filter((e) =>
+      (cfg.roles ?? []).some((r) => Number.isFinite(Number(e.values[r.role]))),
+    );
+  } else if (meta.mechanic === "higher_lower") {
+    const role = cfg.valueRole ?? "population";
+    entities = all.filter((e) => Number.isFinite(Number(e.values[role])) && Number(e.values[role]) > 0);
+  } else if (cfg.refRole) {
+    entities = all.filter((e) => refsOf(e, cfg.refRole!).length > 0);
+  } else {
+    const role = cfg.answerRole ?? "flag";
+    entities = all.filter((e) => e.values[role] != null);
+  }
+
+  const maxLevels = Math.max(1, Math.ceil(entities.length / cfg.perLevel));
+  const lvl = Math.min(Math.max(1, level), Math.min(cfg.levels, maxLevels));
   const questions = entities.slice((lvl - 1) * cfg.perLevel, lvl * cfg.perLevel);
   if (questions.length === 0) return null;
 
@@ -235,4 +255,58 @@ export async function listPublishedGames() {
   } catch {
     return [];
   }
+}
+
+/** Categories = published topics with their published-game counts (home page). */
+export async function listCategories() {
+  try {
+    return await db
+      .select({
+        slug: topics.slug,
+        title: topics.title,
+        sourceConfig: topics.sourceConfig,
+        gamesCount: sql<number>`count(${games.id})::int`,
+      })
+      .from(topics)
+      .leftJoin(games, and(eq(games.topicId, topics.id), eq(games.status, "published")))
+      .where(eq(topics.status, "published"))
+      .groupBy(topics.id)
+      .orderBy(desc(sql`count(${games.id})`));
+  } catch {
+    return [];
+  }
+}
+
+export const PAGE_SIZE = 10;
+
+/** Paginated published games of one category (rule: every DB list is paginated). */
+export async function listGamesByTopic(topicSlug: string, page = 1) {
+  const [topic] = await db
+    .select({ id: topics.id, title: topics.title, sourceConfig: topics.sourceConfig })
+    .from(topics)
+    .where(and(eq(topics.slug, topicSlug), eq(topics.status, "published")))
+    .limit(1);
+  if (!topic) return null;
+
+  const p = Math.max(1, page);
+  const rows = await db
+    .select({
+      slug: games.slug,
+      title: games.title,
+      style: games.style,
+      config: games.config,
+      playsCount: games.playsCount,
+    })
+    .from(games)
+    .where(and(eq(games.topicId, topic.id), eq(games.status, "published")))
+    .orderBy(desc(games.playsCount), games.slug)
+    .limit(PAGE_SIZE + 1)
+    .offset((p - 1) * PAGE_SIZE);
+
+  return {
+    topic,
+    page: p,
+    hasNext: rows.length > PAGE_SIZE,
+    items: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, config: parseConfig(r.config) })),
+  };
 }

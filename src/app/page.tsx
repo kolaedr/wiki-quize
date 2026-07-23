@@ -6,15 +6,16 @@ import { UserButton } from "@/components/auth/user-button";
 import { GameIcon } from "@/components/game-icon";
 import { resolveText } from "@/i18n/locales";
 import { getAdminSession } from "@/lib/admin/guard";
-import { listPublishedGames } from "@/lib/deck/from-db";
+import { listCategories } from "@/lib/deck/from-db";
 
-export const dynamic = "force-dynamic"; // catalog comes from the DB
+export const dynamic = "force-dynamic"; // categories come from the DB
 
+/** Home = categories (topics); games live inside a category. */
 export default async function Home() {
   const t = await getTranslations();
   const locale = await getLocale();
-  const [catalog, adminSession] = await Promise.all([
-    listPublishedGames(),
+  const [categories, adminSession] = await Promise.all([
+    listCategories(),
     getAdminSession(),
   ]);
 
@@ -49,22 +50,22 @@ export default async function Home() {
           </p>
         </div>
 
-        {catalog.length > 0 ? (
+        {categories.length > 0 ? (
           <section className="flex flex-col gap-3">
             <h2 className="font-display px-1 text-sm font-semibold uppercase tracking-wide text-muted">
-              {t("home.catalog")}
+              {t("home.categories")}
             </h2>
-            {catalog.map((g) => (
+            {categories.map((c) => (
               <Link
-                key={g.slug}
-                href={`/play/${g.slug}`}
+                key={c.slug}
+                href={`/category/${c.slug}`}
                 className="glass-card flex items-center gap-4 p-4 transition-all hover:border-accent active:scale-[0.99]"
               >
-                <GameIcon name={(g.style as { icon?: string })?.icon} />
+                <GameIcon name={(c.sourceConfig as { icon?: string })?.icon} />
                 <span className="flex flex-1 flex-col">
-                  <span className="font-semibold">{resolveText(g.title, locale)}</span>
+                  <span className="font-semibold">{resolveText(c.title, locale)}</span>
                   <span className="text-xs text-muted">
-                    {t("levels.count", { levels: g.config.levels })}
+                    {t("home.gamesCount", { count: c.gamesCount })}
                   </span>
                 </span>
                 <ChevronRight size={18} className="text-muted" />
@@ -73,7 +74,7 @@ export default async function Home() {
           </section>
         ) : (
           <div className="flex flex-col items-center gap-4">
-            {/* Card-stack teaser while the catalog is empty (DB not imported yet) */}
+            {/* Teaser while the DB is empty (run npm run db:seed) */}
             <div className="relative h-40 w-64" aria-hidden>
               <div className="glass-card absolute inset-0 -rotate-6 translate-y-3 opacity-40" />
               <div className="glass-card absolute inset-0 rotate-3 translate-y-1.5 opacity-70" />

@@ -109,7 +109,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     .values({
       slug: preset.slug,
       title: preset.title,
-      sourceConfig: { preset: preset.key },
+      sourceConfig: { preset: preset.key, icon: preset.icon },
       fieldSchema: preset.fieldSchema,
       status: "syncing",
     })

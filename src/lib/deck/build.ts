@@ -7,7 +7,7 @@ export interface EntityRef {
   labels: Record<string, string | undefined>;
 }
 
-function refsOf(e: DeckEntity, role: string): EntityRef[] {
+export function refsOf(e: DeckEntity, role: string): EntityRef[] {
   const v = e.values[role];
   if (!Array.isArray(v)) return [];
   return v.filter(

@@ -47,20 +47,21 @@ const DEFAULT_LIMITS: Record<string, unknown> = {
   importsPerCreatorPerDay: 5,
 };
 
-async function upsertTopic(slug: string, title: object, fieldSchema: object) {
+async function upsertTopic(slug: string, title: object, icon: string, fieldSchema: object) {
+  const sourceConfig = { preset: slug, seeded: true, icon };
   const [t] = await db
     .insert(topics)
     .values({
       slug,
       title,
-      sourceConfig: { preset: slug, seeded: true },
+      sourceConfig,
       fieldSchema,
       status: "published",
       syncedAt: new Date(),
     })
     .onConflictDoUpdate({
       target: topics.slug,
-      set: { status: "published", syncedAt: new Date() },
+      set: { status: "published", syncedAt: new Date(), sourceConfig },
     })
     .returning();
   return t;
@@ -128,6 +129,7 @@ async function main() {
   const countriesTopic = await upsertTopic(
     "countries",
     { en: "Countries", uk: "Країни" },
+    "globe",
     [
       { role: "flag", kind: "image", wikidataProp: "P41" },
       { role: "arms", kind: "image", wikidataProp: "P237" },
@@ -169,6 +171,7 @@ async function main() {
   const brandsTopic = await upsertTopic(
     "car-brands",
     { en: "Car brands", uk: "Автомобільні бренди" },
+    "car",
     [
       { role: "logo", kind: "image", wikidataProp: "P154" },
       { role: "originCountries", kind: "entityRefList", wikidataProp: "P495" },

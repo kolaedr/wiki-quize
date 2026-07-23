@@ -16,6 +16,8 @@ export interface TopicPreset {
   key: string;
   slug: string;
   title: LocalizedText;
+  /** GameIcon registry name for the category cover. */
+  icon: string;
   fieldSchema: { role: string; kind: string; wikidataProp?: string }[];
   /** Fields an entity MUST have to enter the pool (besides labels in all active locales). */
   requiredRoles: string[];
@@ -48,6 +50,7 @@ const countries: TopicPreset = {
   key: "countries",
   slug: "countries",
   title: { en: "Countries", uk: "Країни" },
+  icon: "globe",
   fieldSchema: [
     { role: "flag", kind: "image", wikidataProp: "P41" },
     { role: "arms", kind: "image", wikidataProp: "P237" },
@@ -103,6 +106,7 @@ const carBrands: TopicPreset = {
   key: "car-brands",
   slug: "car-brands",
   title: { en: "Car brands", uk: "Автомобільні бренди" },
+  icon: "car",
   fieldSchema: [
     { role: "logo", kind: "image", wikidataProp: "P154" },
     { role: "originCountries", kind: "entityRefList", wikidataProp: "P495/P17" },
