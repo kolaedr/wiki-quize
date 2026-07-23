@@ -7,6 +7,7 @@ import { ChevronLeft, Square, Swords, LayoutGrid } from "lucide-react";
 import type { BinaryCard, ChoiceCard } from "@/lib/deck/types";
 import { useProgress } from "@/stores/progress";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
+import { useGameScrollLock } from "@/lib/use-scroll-lock";
 import { GameBoard } from "./game-board";
 import { SwipeBinaryBoard } from "./swipe-binary-board";
 import { SwipeDuelBoard } from "./swipe-duel-board";
@@ -51,6 +52,8 @@ export function PlayScreen({
   const recordScore = useProgress((s) => s.recordScore);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  // arcade mode: no page scroll/bounce while playing
+  useGameScrollLock();
 
   const onFinish = useCallback(
     (r: SessionResult) => {

@@ -23,8 +23,8 @@
   },
   "game": {
     "flagsTitle": "Flags of the World",
-    "duelHintTouch": "swipe toward the correct card",
-    "duelHintMouse": "click the correct card",
+    "duelHintTouch": "grab the correct card and throw it",
+    "duelHintMouse": "drag or click the correct card",
     "binaryHintTouch": "swipe right — true, left — false",
     "binaryHintMouse": "true or false?",
     "true": "True",

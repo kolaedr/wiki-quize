@@ -6,7 +6,6 @@ import {
   motion,
   useMotionValue,
   useTransform,
-  type MotionValue,
 } from "motion/react";
 import { useTranslations } from "next-intl";
 import { ImageOff } from "lucide-react";
@@ -15,7 +14,8 @@ import { useCoarsePointer } from "@/lib/use-coarse-pointer";
 import { ResultScreen, StatusBar, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
-const SWIPE_THRESHOLD = 80;
+const THROW_DISTANCE = 110;
+const THROW_VELOCITY = 900;
 
 interface Props {
   title: string;
@@ -25,15 +25,15 @@ interface Props {
 }
 
 /**
- * Duel layout of `choice` — a pair of playing cards held in hand (tilted,
- * slightly overlapping). Touch devices: fling the pair toward the answer.
- * Mouse: hover lifts a card, click picks it. Keyboard: ← →.
+ * Duel layout of `choice` — a pair of playing cards held in hand.
+ * THE CARD IS ALIVE: grab it, it follows your finger with tilt and lift;
+ * throw it (distance or flick velocity) to pick it — it flies off with
+ * your throw's momentum. Tap/click also picks. Keyboard: ← →.
  */
 export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
-  const x = useMotionValue(0);
 
   const card = cards[s.idx];
   if (s.done || !card) {
@@ -41,12 +41,6 @@ export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
   }
 
   const pick = (o: ChoiceOption) => s.answer(o.key, o.key === card.correctKey);
-
-  const onDragEnd = (_: unknown, info: { offset: { x: number } }) => {
-    if (info.offset.x <= -SWIPE_THRESHOLD) pick(card.options[0]);
-    else if (info.offset.x >= SWIPE_THRESHOLD) pick(card.options[1]);
-    x.set(0);
-  };
 
   return (
     <main
@@ -104,23 +98,22 @@ export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
         </AnimatePresence>
       </div>
 
-      {/* the hand: two tilted, slightly overlapping playing cards */}
-      <div className="relative min-h-0 flex-1 select-none">
+      {/* the hand: two tilted cards, each one REALLY draggable */}
+      <div className="relative min-h-0 flex-1 touch-none select-none">
         <AnimatePresence mode="wait">
           <motion.div
             key={card.id}
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -30 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
             className="flex h-full items-center justify-center"
           >
             {card.options.map((o, i) => (
-              <HandCard
+              <ThrowableCard
                 key={o.key}
                 option={o}
                 side={i === 0 ? "left" : "right"}
-                x={touch ? x : null}
                 picked={s.picked}
                 correctKey={card.correctKey}
                 onPick={() => pick(o)}
@@ -128,18 +121,6 @@ export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
             ))}
           </motion.div>
         </AnimatePresence>
-
-        {/* touch-only drag layer: fling anywhere on the stage */}
-        {touch && !s.picked && (
-          <motion.div
-            className="absolute inset-0 z-20"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.5}
-            style={{ x }}
-            onDragEnd={onDragEnd}
-          />
-        )}
       </div>
 
       <StreakBadge streak={s.streak} />
@@ -147,33 +128,31 @@ export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
   );
 }
 
-/** One playing card in the hand: base tilt; drag/hover straightens and lifts it. */
-function HandCard({
+/**
+ * A live playing card: base hand-tilt at rest; while grabbed it follows the
+ * finger (drag), tilts with horizontal offset and lifts; released past the
+ * throw threshold (or flicked) it flies away along the throw vector.
+ */
+function ThrowableCard({
   option,
   side,
-  x,
   picked,
   correctKey,
   onPick,
 }: {
   option: ChoiceOption;
   side: "left" | "right";
-  /** MotionValue while touch-dragging, null on mouse devices. */
-  x: MotionValue<number> | null;
   picked: string | null;
   correctKey: string;
   onPick: () => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [thrown, setThrown] = useState<{ x: number; y: number; rotate: number } | null>(null);
   const left = side === "left";
   const baseRotate = left ? -8 : 8;
 
-  // Touch: transforms driven by the drag position
-  const zero = useMotionValue(0);
-  const range = left ? [-SWIPE_THRESHOLD, 0] : [0, SWIPE_THRESHOLD];
-  const rotate = useTransform(x ?? zero, range, left ? [0, baseRotate] : [baseRotate, 0]);
-  const y = useTransform(x ?? zero, range, left ? [-16, 10] : [10, -16]);
-  const scale = useTransform(x ?? zero, range, left ? [1.06, 1] : [1, 1.06]);
+  const dx = useMotionValue(0);
+  const dragTilt = useTransform(dx, [-160, 160], [-14, 14]);
 
   const isCorrect = option.key === correctKey;
   const state = !picked
@@ -185,53 +164,83 @@ function HandCard({
         : "dim";
 
   return (
-    <motion.button
-      onClick={onPick}
-      disabled={!!picked}
-      style={
-        x
-          ? { rotate, y, scale, transformOrigin: "bottom center" }
-          : { rotate: baseRotate, transformOrigin: "bottom center" }
-      }
-      whileHover={!x ? { rotate: 0, y: -14, scale: 1.05, zIndex: 10 } : undefined}
-      className={`glass-card relative aspect-[5/7] w-[44%] max-w-52 p-3 shadow-xl transition-colors ${
-        left ? "-mr-4 z-[1]" : "-ml-4"
-      } ${
-        state === "correct"
-          ? "border-success shadow-glow"
-          : state === "wrong"
-            ? "border-danger"
-            : state === "dim"
-              ? "opacity-40"
-              : ""
-      }`}
+    // static wrapper keeps the resting hand-tilt; inner card moves freely
+    <div
+      className={`w-[44%] max-w-52 ${left ? "-mr-4 z-[1]" : "-ml-4"}`}
+      style={{ rotate: `${baseRotate}deg`, transformOrigin: "bottom center" }}
     >
-      {/* playing-card corner pips */}
-      <span className="absolute left-2.5 top-2 font-display text-xs font-bold text-muted">
-        {left ? "A" : "B"}
-      </span>
-      <span className="absolute bottom-2 right-2.5 rotate-180 font-display text-xs font-bold text-muted">
-        {left ? "A" : "B"}
-      </span>
+      <motion.button
+        onClick={() => !thrown && onPick()}
+        disabled={!!picked}
+        drag={!picked && !thrown}
+        dragSnapToOrigin
+        dragElastic={0.9}
+        dragMomentum={false}
+        style={{ x: dx }}
+        onDragEnd={(_, info) => {
+          const dist = Math.hypot(info.offset.x, info.offset.y);
+          const vel = Math.hypot(info.velocity.x, info.velocity.y);
+          if (dist > THROW_DISTANCE || vel > THROW_VELOCITY) {
+            // fly along the throw vector, keeping the momentum
+            setThrown({
+              x: info.offset.x * 3 + info.velocity.x * 0.35,
+              y: info.offset.y * 3 + info.velocity.y * 0.35,
+              rotate: info.offset.x > 0 ? 40 : -40,
+            });
+            onPick();
+          }
+        }}
+        animate={
+          thrown
+            ? { x: thrown.x, y: thrown.y, rotate: thrown.rotate, opacity: 0, scale: 0.9 }
+            : undefined
+        }
+        transition={thrown ? { duration: 0.45, ease: [0.2, 0.6, 0.4, 1] } : undefined}
+        whileDrag={{ scale: 1.12, rotate: 0, zIndex: 40, cursor: "grabbing" }}
+        whileHover={!picked ? { y: -10, scale: 1.04 } : undefined}
+        className={`glass-card relative block aspect-[5/7] w-full cursor-grab p-3 shadow-xl transition-colors ${
+          state === "correct"
+            ? "border-success shadow-glow"
+            : state === "wrong"
+              ? "border-danger"
+              : state === "dim"
+                ? "opacity-40"
+                : ""
+        }`}
+      >
+        {/* live tilt while dragging */}
+        <motion.span style={{ rotate: dragTilt }} className="flex h-full w-full">
+          <span className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-lg border border-line/60 p-2">
+            {option.image && !imgFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ emoji fallback
+              <img
+                src={option.image}
+                alt=""
+                draggable={false}
+                onError={() => setImgFailed(true)}
+                className="pointer-events-none max-h-[70%] max-w-full rounded-md object-contain drop-shadow-lg"
+              />
+            ) : option.emoji ? (
+              <span className="text-6xl">{option.emoji}</span>
+            ) : option.image && imgFailed && !option.label ? (
+              <ImageOff size={40} className="text-muted opacity-50" />
+            ) : null}
+            {option.label && (
+              <span className="text-center text-sm font-semibold leading-tight">
+                {option.label}
+              </span>
+            )}
+          </span>
+        </motion.span>
 
-      <span className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-lg border border-line/60 p-2">
-        {option.image && !imgFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ emoji fallback
-          <img
-            src={option.image}
-            alt=""
-            onError={() => setImgFailed(true)}
-            className="max-h-[70%] max-w-full rounded-md object-contain drop-shadow-lg"
-          />
-        ) : option.emoji ? (
-          <span className="text-6xl">{option.emoji}</span>
-        ) : option.image && imgFailed && !option.label ? (
-          <ImageOff size={40} className="text-muted opacity-50" />
-        ) : null}
-        {option.label && (
-          <span className="text-center text-sm font-semibold leading-tight">{option.label}</span>
-        )}
-      </span>
-    </motion.button>
+        {/* playing-card corner pips */}
+        <span className="absolute left-2.5 top-2 font-display text-xs font-bold text-muted">
+          {left ? "A" : "B"}
+        </span>
+        <span className="absolute bottom-2 right-2.5 rotate-180 font-display text-xs font-bold text-muted">
+          {left ? "A" : "B"}
+        </span>
+      </motion.button>
+    </div>
   );
 }

@@ -47,10 +47,13 @@ export function SwipeBinaryBoard({ title, cards, onFinish }: Props) {
   const pick = (saidTrue: boolean) =>
     s.answer(saidTrue ? "true" : "false", saidTrue === card.isTrue);
 
-  const onDragEnd = (_: unknown, info: { offset: { x: number } }) => {
-    if (info.offset.x >= SWIPE_THRESHOLD) pick(true);
-    else if (info.offset.x <= -SWIPE_THRESHOLD) pick(false);
-    x.set(0);
+  const onDragEnd = (
+    _: unknown,
+    info: { offset: { x: number }; velocity: { x: number } },
+  ) => {
+    // distance OR a flick commits the answer — the card feels thrown
+    if (info.offset.x >= SWIPE_THRESHOLD || info.velocity.x > 800) pick(true);
+    else if (info.offset.x <= -SWIPE_THRESHOLD || info.velocity.x < -800) pick(false);
   };
 
   const answered = s.picked !== null;
@@ -74,7 +77,7 @@ export function SwipeBinaryBoard({ title, cards, onFinish }: Props) {
       </div>
 
       {/* card stack */}
-      <div className="relative min-h-0 flex-1 select-none">
+      <div className="relative min-h-0 flex-1 touch-none select-none">
         {/* next card peeking underneath */}
         {cards[s.idx + 1] && (
           <div className="glass-card absolute inset-x-6 bottom-2 top-6 rotate-2 opacity-40" />
@@ -87,13 +90,15 @@ export function SwipeBinaryBoard({ title, cards, onFinish }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{
               opacity: 0,
-              x: answered ? (wasCorrect === card.isTrue ? 220 : -220) : 0,
-              rotate: answered ? (card.isTrue ? 12 : -12) : 0,
+              x: answered ? (s.picked === "true" ? 420 : -420) : 0,
+              y: answered ? -60 : 0,
+              rotate: answered ? (s.picked === "true" ? 25 : -25) : 0,
             }}
-            transition={{ duration: 0.22 }}
-            drag={touch && !answered ? "x" : false}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.6}
+            transition={{ duration: 0.35, ease: [0.2, 0.6, 0.4, 1] }}
+            drag={!answered}
+            dragSnapToOrigin
+            dragElastic={0.9}
+            dragMomentum={false}
             style={{ x, rotate }}
             onDragEnd={onDragEnd}
             className={`glass-card absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center ${
