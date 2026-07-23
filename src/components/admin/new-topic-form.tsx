@@ -1,15 +1,17 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Loader2, Plus, Search, Trash2, Wand2 } from "lucide-react";
+import { Loader2, Plus, Search, Trash2, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createTopicAction,
   probeClassAction,
+  searchClassesAction,
   type ActionResult,
   type ProbeResult,
 } from "@/lib/admin/actions";
+import type { ClassCandidate } from "@/lib/ingest/probe";
 import { DEF_TEMPLATES, type TopicDef, type TopicFieldDef } from "@/lib/ingest/def";
 
 const ICONS = ["landmark", "scale", "car", "globe", "flag", "shield", "languages", "users", "deck"];
@@ -43,13 +45,31 @@ export function NewTopicForm() {
   const [titleEn, setTitleEn] = useState("");
   const [titleUk, setTitleUk] = useState("");
   const [icon, setIcon] = useState("deck");
-  const [classQids, setClassQids] = useState("");
+  // selected classes are chips {qid,label}; the QID string is derived from them
+  const [classItems, setClassItems] = useState<ClassCandidate[]>([]);
   const [sitelinksMin, setSitelinksMin] = useState(40);
   const [fields, setFields] = useState<TopicFieldDef[]>([]);
+  const [query, setQuery] = useState("");
+  const [candidates, setCandidates] = useState<ClassCandidate[] | null>(null);
+  const [searching, startSearch] = useTransition();
+  const [manual, setManual] = useState("");
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [probing, startProbe] = useTransition();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
+
+  const classQids = classItems.map((c) => c.qid).join(", ");
+  const addClass = (c: ClassCandidate) =>
+    setClassItems((xs) => (xs.some((x) => x.qid === c.qid) ? xs : [...xs, c]));
+  const removeClass = (qid: string) =>
+    setClassItems((xs) => xs.filter((x) => x.qid !== qid));
+
+  const runSearch = () =>
+    startSearch(async () => {
+      setResult(null);
+      const r = await searchClassesAction(query);
+      setCandidates(r.ok ? (r.classes ?? []) : []);
+    });
 
   const liveCount = useMemo(
     () => (probe?.distribution ? countAt(probe.distribution, sitelinksMin) : null),
@@ -62,14 +82,24 @@ export function NewTopicForm() {
       setProbe(await probeClassAction(classQids));
     });
 
+  const addManual = () => {
+    const qids = manual
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter((q) => /^Q\d+$/.test(q));
+    for (const qid of qids) addClass({ qid, label: qid });
+    setManual("");
+  };
+
   const applyTemplate = (t: TopicDef) => {
     setSlug(t.slug);
     setTitleEn(t.title.en);
     setTitleUk(t.title.uk ?? "");
     setIcon(t.icon);
-    setClassQids(t.classQids.join(", "));
+    setClassItems(t.classQids.map((q) => ({ qid: q, label: q })));
     setSitelinksMin(t.sitelinksMin);
     setFields(t.fields.map((f) => ({ ...f })));
+    setCandidates(null);
     setProbe(null);
     setResult(null);
   };
@@ -118,18 +148,95 @@ export function NewTopicForm() {
       {/* STEP 1 — розвідка класу */}
       <div className="flex flex-col gap-2 rounded-xl border border-line/60 p-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Крок 1 · Розвідка
+          Крок 1 · Знайди клас і зроби розвідку
         </span>
+
+        {/* search classes by WORD — no need to know QIDs */}
         <div className="flex items-center gap-2">
           <Input
             className="h-10 flex-1"
-            placeholder="Класи Wikidata (Q3231690, Q570116)"
-            value={classQids}
-            onChange={(e) => setClassQids(e.target.value)}
+            placeholder="Що збираємо? напр. «модель авто», «країна», «замок»"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && runSearch()}
           />
-          <Button size="sm" disabled={probing || !classQids.trim()} onClick={runProbe}>
+          <Button size="sm" variant="secondary" disabled={searching || !query.trim()} onClick={runSearch}>
+            {searching ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            Знайти клас
+          </Button>
+        </div>
+
+        {/* search results — click to add */}
+        {candidates && (
+          <div className="max-h-52 overflow-y-auto rounded-lg border border-line/60">
+            {candidates.length === 0 && (
+              <p className="p-3 text-xs text-muted">Нічого не знайшлось — спробуй інше слово.</p>
+            )}
+            {candidates.map((c) => {
+              const picked = classItems.some((x) => x.qid === c.qid);
+              return (
+                <button
+                  key={c.qid}
+                  type="button"
+                  onClick={() => addClass(c)}
+                  disabled={picked}
+                  className="flex w-full items-center gap-2 border-t border-line/40 p-2 text-left text-xs first:border-t-0 hover:bg-accent-soft/40 disabled:opacity-40"
+                >
+                  <Plus size={13} className="shrink-0 text-accent" />
+                  <span className="flex-1">
+                    <span className="font-semibold">{c.label}</span>{" "}
+                    <span className="text-muted">({c.qid})</span>
+                    {c.description && (
+                      <span className="block text-[11px] text-muted">{c.description}</span>
+                    )}
+                  </span>
+                  {picked && <span className="text-[11px] text-success">додано</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* selected classes as chips */}
+        {classItems.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted">Класи:</span>
+            {classItems.map((c) => (
+              <span
+                key={c.qid}
+                className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent"
+              >
+                {c.label}
+                <span className="text-[10px] opacity-70">{c.qid}</span>
+                <button type="button" onClick={() => removeClass(c.qid)} aria-label="прибрати">
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* advanced: paste a QID directly */}
+        <details className="text-xs text-muted">
+          <summary className="cursor-pointer">Ввести QID вручну</summary>
+          <div className="mt-2 flex items-center gap-2">
+            <Input
+              className="h-9 flex-1"
+              placeholder="Q3231690, Q570116"
+              value={manual}
+              onChange={(e) => setManual(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addManual()}
+            />
+            <Button size="sm" variant="ghost" onClick={addManual}>
+              Додати
+            </Button>
+          </div>
+        </details>
+
+        <div className="flex items-center gap-2">
+          <Button size="sm" disabled={probing || classItems.length === 0} onClick={runProbe}>
             {probing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
-            Розвідка
+            Розвідка обраних класів
           </Button>
         </div>
 

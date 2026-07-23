@@ -1,6 +1,51 @@
 import { qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
 import type { TopicFieldDef } from "./def";
 
+const SEARCH_UA =
+  process.env.WIKIMEDIA_UA ??
+  "WikiQuize/0.1 (https://wikiquize.example; dev) class-search";
+
+export interface ClassCandidate {
+  qid: string;
+  label: string;
+  description?: string;
+}
+
+/**
+ * Class search by WORD (no need to know QIDs): wbsearchentities returns
+ * matching Wikidata items with label + description, the admin picks the right
+ * concept ("automobile model" Q3231690 vs "automobile" Q1420). Ukrainian input
+ * searches uk labels, Latin input searches en.
+ */
+export async function searchClasses(query: string): Promise<ClassCandidate[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const lang = /[Ѐ-ӿ]/.test(q) ? "uk" : "en";
+  const url = new URL("https://www.wikidata.org/w/api.php");
+  url.search = new URLSearchParams({
+    action: "wbsearchentities",
+    search: q,
+    language: lang,
+    uselang: lang,
+    type: "item",
+    limit: "10",
+    format: "json",
+  }).toString();
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": SEARCH_UA, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`wbsearchentities ${res.status}`);
+  const json = (await res.json()) as {
+    search?: { id: string; label?: string; description?: string }[];
+  };
+  return (json.search ?? [])
+    .filter((s) => /^Q\d+$/.test(s.id))
+    .map((s) => ({ qid: s.id, label: s.label ?? s.id, description: s.description }));
+}
+
 /**
  * PROBE (розвідка) — pipeline v2, step 1. Cheap reconnaissance queries the
  * admin runs BEFORE a full import: how many items exist, which properties

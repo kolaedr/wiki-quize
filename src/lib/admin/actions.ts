@@ -8,7 +8,9 @@ import { validateDef, type TopicDef } from "@/lib/ingest/def";
 import {
   discoverProperties,
   sampleEntity,
+  searchClasses,
   sitelinksDistribution,
+  type ClassCandidate,
   type ProbeProperty,
   type SampleEntity,
 } from "@/lib/ingest/probe";
@@ -67,6 +69,23 @@ export async function setGameStatusAction(
   }
 }
 
+
+export interface ClassSearchResult {
+  ok: boolean;
+  message?: string;
+  classes?: ClassCandidate[];
+}
+
+/** Search Wikidata classes by word (no QID needed) — see searchClasses. */
+export async function searchClassesAction(query: string): Promise<ClassSearchResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (!query.trim()) return { ok: true, classes: [] };
+  try {
+    return { ok: true, classes: await searchClasses(query) };
+  } catch (err) {
+    return { ok: false, message: String(err).slice(0, 200) };
+  }
+}
 
 export interface ProbeResult {
   ok: boolean;
