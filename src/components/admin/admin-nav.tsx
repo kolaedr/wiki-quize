@@ -6,7 +6,7 @@ import { Database, Gamepad2, LayoutDashboard } from "lucide-react";
 
 const LINKS = [
   { href: "/admin", label: "Огляд", icon: LayoutDashboard, exact: true },
-  { href: "/admin/topics", label: "Теми", icon: Database },
+  { href: "/admin/topics", label: "Датасети", icon: Database },
   { href: "/admin/games", label: "Ігри", icon: Gamepad2 },
 ];
 

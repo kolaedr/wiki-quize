@@ -26,7 +26,7 @@ export default async function AdminOverviewPage() {
   ]);
 
   const stats = [
-    { label: "Теми", value: topicN?.n ?? 0, icon: Database, href: "/admin/topics" },
+    { label: "Датасети", value: topicN?.n ?? 0, icon: Database, href: "/admin/topics" },
     { label: "Сутності", value: entityN?.n ?? 0, icon: Layers, href: "/admin/topics" },
     { label: "Ігри", value: gameN?.n ?? 0, icon: Gamepad2, href: "/admin/games" },
     { label: "Опубліковано", value: publishedN?.n ?? 0, icon: ShieldCheck, href: "/admin/games" },
@@ -38,7 +38,7 @@ export default async function AdminOverviewPage() {
         <h1 className="font-display text-2xl font-bold">Огляд</h1>
         <div className="flex gap-2">
           <Button asChild size="sm" variant="secondary">
-            <Link href="/admin/topics">Теми</Link>
+            <Link href="/admin/topics">Датасети</Link>
           </Button>
           <Button asChild size="sm" variant="secondary">
             <Link href="/admin/games">Ігри</Link>
