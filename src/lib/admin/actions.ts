@@ -372,19 +372,32 @@ export async function setTopicCategoryAction(
 }
 
 /**
- * Clean reset: wipe ALL content (categories, datasets, entities, games, and —
- * via cascade — their sessions/jobs/reports) so it can be rebuilt structurally
- * through the builder. Auth data is untouched.
+ * Clean reset of CONTENT: wipe datasets + games (entities/jobs/sessions cascade
+ * off them) so it can be rebuilt through the builder. KEEPS the category
+ * structure — that's the scaffolding the admin already set up. Auth untouched.
  */
 export async function resetContentAction(): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   try {
     await db.delete(games); // sessions/reports/challenges cascade off games
     await db.delete(topics); // entities + import jobs cascade off topics
-    await db.delete(categories);
+    // categories are intentionally kept
     revalidatePath("/admin");
     revalidatePath("/");
-    return { ok: true, message: "базу контенту очищено" };
+    return { ok: true, message: "датасети й ігри очищено (категорії лишились)" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Delete a single dataset (its entities, games, jobs cascade off it). */
+export async function deleteTopicAction(topicSlug: string): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    await db.delete(topics).where(eq(topics.slug, topicSlug));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "датасет видалено" };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }

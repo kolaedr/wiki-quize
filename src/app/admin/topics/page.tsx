@@ -4,7 +4,7 @@ import { Database, Rows3 } from "lucide-react";
 import { db } from "@/db";
 import { categories, topicEntities, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
-import { importPresetAction, resetContentAction } from "@/lib/admin/actions";
+import { deleteTopicAction, importPresetAction, resetContentAction } from "@/lib/admin/actions";
 import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
 import { CategorySelect } from "@/components/admin/category-controls";
@@ -42,7 +42,7 @@ export default async function AdminTopicsPage() {
         <ActionButton
           variant="ghost"
           confirm
-          label="Очистити базу"
+          label="Очистити датасети й ігри"
           action={resetContentAction}
         />
       </div>
@@ -104,6 +104,14 @@ export default async function AdminTopicsPage() {
                     label={topic ? "Синхронізувати" : "Імпортувати"}
                     action={importPresetAction.bind(null, importKey)}
                   />
+                  {topic && (
+                    <ActionButton
+                      variant="ghost"
+                      confirm
+                      label="Видалити"
+                      action={deleteTopicAction.bind(null, slug)}
+                    />
+                  )}
                 </div>
               </div>
               {report?.fieldCoverage && (
