@@ -20,7 +20,7 @@ import {
   BRANDS,
   COUNTRIES,
   brandLogoUrls,
-  countryArmsUrl,
+  countryArmsUrls,
   countryFlagUrl,
   countryRef,
 } from "./seed-data";
@@ -67,6 +67,8 @@ async function upsertTopic(slug: string, title: object, icon: string, fieldSchem
   return t;
 }
 
+const MIN_PUBLISHABLE_ITEMS = 8;
+
 async function upsertGame(g: {
   slug: string;
   topicId: string;
@@ -82,6 +84,8 @@ async function upsertGame(g: {
     perLevel: PER_LEVEL,
     levels: Math.max(1, Math.ceil(g.itemCount / PER_LEVEL)),
   };
+  // Too few playable items -> the game must NOT reach the catalog (it would 404)
+  const status = g.itemCount >= MIN_PUBLISHABLE_ITEMS ? "published" : "unlisted";
   await db
     .insert(games)
     .values({
@@ -91,13 +95,16 @@ async function upsertGame(g: {
       config,
       style: { icon: g.icon },
       title: g.title,
-      status: "published",
+      status,
     })
     .onConflictDoUpdate({
       target: games.slug,
-      set: { topicId: g.topicId, status: "published", config, style: { icon: g.icon } },
+      set: { topicId: g.topicId, status, config, style: { icon: g.icon } },
     });
-  console.log(`  game ${g.slug} (${config.levels} levels, ${g.itemCount} items)`);
+  console.log(
+    `  game ${g.slug} (${config.levels} levels, ${g.itemCount} items)` +
+      (status === "unlisted" ? " -> UNLISTED: too few items" : ""),
+  );
 }
 
 async function main() {
@@ -112,16 +119,14 @@ async function main() {
   // ── Validate every image URL up front ─────────────────────────
   console.log("Validating image URLs (flags, arms, logos)…");
   const flagUrls = COUNTRIES.map(countryFlagUrl);
-  const armsUrls = COUNTRIES.map(countryArmsUrl);
+  const armsUrls = COUNTRIES.flatMap(countryArmsUrls);
   const logoUrls = BRANDS.flatMap(brandLogoUrls);
   const ok = await filterWorkingUrls([...flagUrls, ...armsUrls, ...logoUrls]);
 
   const brokenFlags = flagUrls.filter((u) => !ok.has(u)).length;
-  const brokenArms = armsUrls.filter((u) => !ok.has(u)).length;
+  const armsOkCount = COUNTRIES.filter((x) => countryArmsUrls(x).some((u) => ok.has(u))).length;
   console.log(
-    `  flags: ${COUNTRIES.length - brokenFlags}/${COUNTRIES.length} ok · arms: ${
-      COUNTRIES.length - brokenArms
-    }/${COUNTRIES.length} ok`,
+    `  flags: ${COUNTRIES.length - brokenFlags}/${COUNTRIES.length} ok · arms: ${armsOkCount}/${COUNTRIES.length} ok`,
   );
 
   // ── Countries ────────────────────────────────────────────────
@@ -143,7 +148,7 @@ async function main() {
   await db.insert(topicEntities).values(
     COUNTRIES.map((x, i) => {
       const flagU = countryFlagUrl(x);
-      const armsU = countryArmsUrl(x);
+      const armsU = countryArmsUrls(x).find((u) => ok.has(u));
       return {
         topicId: countriesTopic.id,
         wikidataQid: x.qid,
@@ -151,7 +156,7 @@ async function main() {
         values: {
           flag: ok.has(flagU) ? flagU : undefined,
           flagEmoji: x.emoji, // content fallback if the flag image ever breaks
-          arms: ok.has(armsU) ? armsU : undefined,
+          arms: armsU,
           languages: x.langs,
           population: x.population,
           area: x.area,
@@ -163,7 +168,7 @@ async function main() {
       };
     }),
   );
-  const armsCount = COUNTRIES.filter((x) => ok.has(countryArmsUrl(x))).length;
+  const armsCount = COUNTRIES.filter((x) => countryArmsUrls(x).some((u) => ok.has(u))).length;
   console.log(`  ${nC} countries (${armsCount} with verified arms)`);
 
   // ── Car brands ───────────────────────────────────────────────

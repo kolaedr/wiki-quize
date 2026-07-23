@@ -40,6 +40,12 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning className="antialiased">
       <body>
+        {/* no-flash theme init: runs before paint, OUTSIDE React components */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var m=localStorage.getItem("wq-theme");var d=m==="dark"||((!m||m==="system")&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}`,
+          }}
+        />
         <ThemeProvider>
           <NextIntlClientProvider messages={messages}>
             <div className="mystic-bg" aria-hidden />

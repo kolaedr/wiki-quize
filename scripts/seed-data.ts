@@ -127,7 +127,17 @@ export const COUNTRIES: SeedCountry[] = [
 ];
 
 export const countryFlagUrl = (x: SeedCountry) => flag(x.flagFile);
-export const countryArmsUrl = (x: SeedCountry) => flag(`Coat of arms of ${x.en}.svg`);
+
+/** Commons arms filenames vary a lot — candidates, first working one wins. */
+export const countryArmsUrls = (x: SeedCountry) =>
+  [
+    `Coat of arms of ${x.en}.svg`,
+    `Coat of arms of the ${x.en}.svg`,
+    `Emblem of ${x.en}.svg`,
+    `National Emblem of ${x.en}.svg`,
+    `State Emblem of ${x.en}.svg`,
+    `Coat of arms of ${x.en}.png`,
+  ].map(flag);
 export const countryRef = (x: SeedCountry): Ref => ({
   qid: x.qid,
   labels: { en: x.en, uk: x.uk },

@@ -282,6 +282,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     // Games needing labels of RELATED entities (languages, origin countries)
     // wait for the reference-label enrichment pass — see stage-1 checklist.
     const PER_LEVEL = 20;
+    const MIN_PUBLISHABLE_ITEMS = 8;
     for (const g of STARTER_GAMES[preset.key] ?? []) {
       const withRole = g.countRole
         ? entities.filter((e) => {
@@ -295,6 +296,8 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
         perLevel: PER_LEVEL,
         levels: Math.max(1, Math.ceil(withRole / PER_LEVEL)),
       };
+      // Too few playable items → keep out of the catalog (would 404)
+      const status = withRole >= MIN_PUBLISHABLE_ITEMS ? "published" : "unlisted";
       await db
         .insert(games)
         .values({
@@ -304,11 +307,11 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
           config,
           style: { icon: g.icon },
           title: g.title,
-          status: "published",
+          status,
         })
         .onConflictDoUpdate({
           target: games.slug,
-          set: { topicId: topic.id, status: "published", config },
+          set: { topicId: topic.id, status, config },
         });
     }
     await db

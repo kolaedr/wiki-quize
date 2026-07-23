@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { Sun, Moon, MonitorSmartphone } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
 
 /** Click cycles: system → light → dark → system. Icon shows the current mode. */
 const CYCLE = ["system", "light", "dark"] as const;
