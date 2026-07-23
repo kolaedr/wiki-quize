@@ -15,6 +15,15 @@ import {
 } from "@/lib/admin/actions";
 import type { ClassCandidate, ProbeField } from "@/lib/ingest/probe";
 import type { TopicFieldDef } from "@/lib/ingest/def";
+import { ImportRunner } from "@/components/admin/import-runner";
+
+/** human-readable field kinds */
+const KIND_UK: Record<string, string> = {
+  image: "зображення",
+  number: "число",
+  date: "дата/рік",
+  entityRefList: "звʼязок (інша сутність)",
+};
 
 /** extra languages that can be pulled after the English root */
 const EXTRA_LOCALES = [
@@ -67,6 +76,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const [counting, startCount] = useTransition();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
+  const [saved, setSaved] = useState(false); // config saved → run batched import
 
   const classCsv = classItems.map((c) => c.qid).join(", ");
   const classQids = classItems.map((c) => c.qid);
@@ -124,7 +134,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
       const fields = fieldsFrom((probe?.sample?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind));
       const r = await setupTopicAction(topicSlug, classQids, threshold, fields, ["en", ...locales]);
       setResult(r);
-      if (r.ok) router.refresh();
+      if (r.ok) setSaved(true); // switches to the batched import runner below
     });
 
   const sample = probe?.ok ? probe.sample : null;
@@ -274,7 +284,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
                       <td className="p-2">
                         {p.label} <span className="text-muted">({p.prop})</span>
                       </td>
-                      <td className="p-2">{p.kind ?? "—"}</td>
+                      <td className="p-2">{p.kind ? KIND_UK[p.kind] : "—"}</td>
                       <td className="max-w-40 truncate p-2 text-muted">{p.example ?? ""}</td>
                     </tr>
                   ))}
@@ -306,21 +316,22 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button disabled={pending || picked.size === 0} onClick={submit}>
-              {pending && <Loader2 size={14} className="animate-spin" />}
-              Імпортувати обрані поля
-            </Button>
-            {result && (
-              <span className={`text-xs ${result.ok ? "text-success" : "text-danger"}`}>
-                {result.message}
-              </span>
-            )}
-          </div>
-          {pending && (
-            <p className="text-[11px] text-muted">
-              Імпорт іде батчами — може зайняти хвилину-дві на великому класі, не закривай сторінку.
-            </p>
+          {saved ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-success">Конфіг збережено — тягну дані батчами:</span>
+              <ImportRunner topicSlug={topicSlug} autoStart />
+              <p className="text-[11px] text-muted">
+                Іде по черзі, батч за батчем — не закривай сторінку до завершення.
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Button disabled={pending || picked.size === 0} onClick={submit}>
+                {pending && <Loader2 size={14} className="animate-spin" />}
+                Зберегти й імпортувати
+              </Button>
+              {result && !result.ok && <span className="text-xs text-danger">{result.message}</span>}
+            </div>
           )}
         </>
       )}

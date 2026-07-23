@@ -446,7 +446,7 @@ export async function failStaleJobs() {
 
 
 /** Fetch labels for referenced QIDs and inflate string refs into {qid, labels}. */
-async function enrichRefs(
+export async function enrichRefs(
   entities: RawEntity[],
   refRoles: string[],
   locales: readonly string[],

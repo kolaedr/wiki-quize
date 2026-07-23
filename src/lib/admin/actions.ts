@@ -18,6 +18,7 @@ import {
   type ProbeSample,
 } from "@/lib/ingest/probe";
 import { MIN_PUBLISHABLE_ITEMS, STARTER_GAMES, runImport } from "@/lib/ingest/run";
+import { importTick, startDefImportJob, type JobProgress } from "@/lib/ingest/job";
 import { getAdminSession } from "./guard";
 
 export interface ActionResult {
@@ -353,6 +354,8 @@ export async function setupTopicAction(
       locales: locs,
     };
     validateDef(def);
+    // SAVE config only — the heavy import runs as a batched job (startImportJobAction),
+    // driven tick-by-tick from the client so nothing hangs for minutes.
     await db
       .update(topics)
       .set({
@@ -360,18 +363,36 @@ export async function setupTopicAction(
         fieldSchema: fields.map((f) => ({ role: f.role, kind: f.kind, wikidataProp: f.prop })),
       })
       .where(eq(topics.id, topic.id));
-    const report = await runImport(topic.slug);
     revalidatePath("/admin");
-    revalidatePath("/");
-    return {
-      ok: true,
-      message: `${report.accepted}${
-        report.totalExisting != null ? ` з ${report.totalExisting} існуючих` : ""
-      } сутностей імпортовано; ігри — unlisted (склади у «Можливі ігри» / «Ігри»)`,
-    };
+    return { ok: true, message: "конфіг збережено" };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }
+}
+
+export interface StartJobResult {
+  ok: boolean;
+  jobId?: string;
+  message?: string;
+}
+
+/** Start a batched import job for a configured dataset; poll with importTickAction. */
+export async function startImportJobAction(topicSlug: string): Promise<StartJobResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const r = await startDefImportJob(topicSlug);
+  return "error" in r ? { ok: false, message: r.error } : { ok: true, jobId: r.jobId };
+}
+
+/** Run ONE batch of an import job. The client loops this until `done`. */
+export async function importTickAction(jobId: string): Promise<JobProgress> {
+  if (!(await getAdminSession()))
+    return { jobId, status: "failed", phase: "done", step: 0, totalSteps: 1, accepted: 0, done: true, message: "forbidden" };
+  const p = await importTick(jobId);
+  if (p.done) {
+    revalidatePath("/admin");
+    revalidatePath("/");
+  }
+  return p;
 }
 
 /** NO-CODE builder: save a topic definition and run its first import. */

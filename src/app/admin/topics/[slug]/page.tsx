@@ -7,6 +7,7 @@ import { topicEntities, topics } from "@/db/schema";
 import { ActionButton } from "@/components/admin/action-button";
 import { DatasetSetup } from "@/components/admin/dataset-setup";
 import { GameComposer } from "@/components/admin/game-composer";
+import { ImportRunner } from "@/components/admin/import-runner";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
@@ -33,7 +34,8 @@ export default async function AdminTopicPage({
 
   // draft = created but no class/fields yet → show the setup builder
   const sc = topic.sourceConfig as { def?: { fields?: unknown[] }; preset?: string } | null;
-  const needsSetup = !sc?.preset && !sc?.def?.fields?.length;
+  const isDef = !!sc?.def?.fields?.length;
+  const needsSetup = !sc?.preset && !isDef;
 
   const composed = needsSetup ? null : await proposeGamesForTopic(slug, "uk").catch(() => null);
 
@@ -66,14 +68,17 @@ export default async function AdminTopicPage({
       </div>
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-bold">{resolveText(topic.title, "uk")}</h1>
-        {!needsSetup && (
-          <ActionButton
-            variant="secondary"
-            label="Синхронізувати з Wikidata"
-            icon="sync"
-            action={importPresetAction.bind(null, slug)}
-          />
-        )}
+        {!needsSetup &&
+          (isDef ? (
+            <ImportRunner topicSlug={slug} />
+          ) : (
+            <ActionButton
+              variant="secondary"
+              label="Синхронізувати з Wikidata"
+              icon="sync"
+              action={importPresetAction.bind(null, slug)}
+            />
+          ))}
       </div>
 
       {needsSetup ? (
