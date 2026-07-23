@@ -8,6 +8,13 @@
       "when": 1784730323429,
       "tag": "0000_public_roughhouse",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784815227810,
+      "tag": "0001_illegal_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }
