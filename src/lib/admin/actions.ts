@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, games, topicEntities, topics } from "@/db/schema";
-import { autoGamesFor, validateDef, type TopicDef } from "@/lib/ingest/def";
+import {
+  autoGamesFor,
+  validateDef,
+  type TopicDef,
+  type TopicFieldDef,
+} from "@/lib/ingest/def";
 import {
   discoverProperties,
   sampleEntity,
@@ -267,6 +272,98 @@ export async function probeClassAction(classQidsRaw: string): Promise<ProbeResul
       sampleSize: discovered.sampleSize,
       properties: discovered.properties,
       sample,
+    };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+export interface CreateDraftResult extends ActionResult {
+  slug?: string;
+}
+
+/**
+ * DATASET-FIRST flow: create an empty draft dataset (name + icon + category)
+ * with NO class/fields yet. The builder (class search, probe, field checkboxes,
+ * import) then happens on the dataset's own page — see setupTopicAction.
+ */
+export async function createDraftTopicAction(
+  titleEn: string,
+  titleUk: string,
+  icon: string,
+  categoryId = "",
+): Promise<CreateDraftResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (!titleEn.trim()) return { ok: false, message: "Назва (EN) обовʼязкова" };
+  const slug = titleEn
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  if (!/^[a-z0-9-]{2,40}$/.test(slug))
+    return { ok: false, message: "Назва має містити латинські літери/цифри для slug" };
+  try {
+    const [exists] = await db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(eq(topics.slug, slug))
+      .limit(1);
+    if (exists) return { ok: false, message: `slug "${slug}" вже зайнятий — зміни назву` };
+    await db.insert(topics).values({
+      slug,
+      title: { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) },
+      sourceConfig: { icon },
+      fieldSchema: [],
+      status: "draft",
+      ...(categoryId ? { categoryId } : {}),
+    });
+    revalidatePath("/admin");
+    return { ok: true, message: "датасет створено", slug };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/**
+ * Save a draft dataset's class + fields (chosen via probe checkboxes) and run
+ * the first import. Runs on the dataset page, after createDraftTopicAction.
+ */
+export async function setupTopicAction(
+  topicSlug: string,
+  classQids: string[],
+  sitelinksMin: number,
+  fields: TopicFieldDef[],
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [topic] = await db.select().from(topics).where(eq(topics.slug, topicSlug)).limit(1);
+    if (!topic) return { ok: false, message: "датасет не знайдено" };
+    const icon = (topic.sourceConfig as { icon?: string })?.icon ?? "deck";
+    const def: TopicDef = {
+      slug: topic.slug,
+      title: topic.title as Record<string, string>,
+      icon,
+      classQids,
+      sitelinksMin: Number(sitelinksMin) || 0,
+      limit: 600,
+      fields,
+    };
+    validateDef(def);
+    await db
+      .update(topics)
+      .set({
+        sourceConfig: { def, icon },
+        fieldSchema: fields.map((f) => ({ role: f.role, kind: f.kind, wikidataProp: f.prop })),
+      })
+      .where(eq(topics.id, topic.id));
+    const report = await runImport(topic.slug);
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return {
+      ok: true,
+      message: `${report.accepted}${
+        report.totalExisting != null ? ` з ${report.totalExisting} існуючих` : ""
+      } сутностей імпортовано; ігри — unlisted (склади у «Можливі ігри» / «Ігри»)`,
     };
   } catch (err) {
     return { ok: false, message: dbError(err) };

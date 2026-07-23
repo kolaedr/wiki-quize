@@ -59,7 +59,11 @@ const QID_RE = /^Q\d+$/;
 function classUnion(classQids: string[]): string {
   const qids = classQids.filter((q) => QID_RE.test(q));
   if (qids.length === 0) throw new Error("classQids must be like Q3231690");
-  return qids.map((q) => `{ ?item wdt:P31/wdt:P279* wd:${q} . }`).join("\n  UNION\n  ");
+  // PROBE uses DIRECT P31 (no P279* transitive closure). Reconnaissance must be
+  // fast/reliable; the transitive closure is what times out on big classes like
+  // "country" (Q6256). It's an ESTIMATE — the real import (buildTopicQuery) still
+  // uses P31/P279* to also catch subclass instances.
+  return qids.map((q) => `{ ?item wdt:P31 wd:${q} . }`).join("\n  UNION\n  ");
 }
 
 /**

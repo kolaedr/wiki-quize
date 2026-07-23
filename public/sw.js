@@ -3,8 +3,9 @@
  * - pages/API: network-first with cache fallback, so an active game
  *   survives a network hiccup after first load
  */
-const CACHE = "wq-v1";
-const STATIC_RE = /\/(_next\/static|icon\.svg|manifest\.webmanifest)/;
+const CACHE = "wq-v2";
+const STATIC_RE =
+  /\/(_next\/static|icon\.svg|icon-\d+\.png|favicon-32\.png|apple-touch-icon\.png|manifest\.webmanifest)/;
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();

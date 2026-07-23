@@ -16,6 +16,13 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t("description"),
     applicationName: t("name"),
     manifest: "/manifest.webmanifest",
+    icons: {
+      icon: [
+        { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+        { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      ],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
   };
 }
 

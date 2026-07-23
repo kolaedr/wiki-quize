@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { ArrowLeft, ImageOff, Wand2 } from "lucide-react";
+import { ArrowLeft, ImageOff, Settings2, Wand2 } from "lucide-react";
 import { db } from "@/db";
 import { topicEntities, topics } from "@/db/schema";
 import { ActionButton } from "@/components/admin/action-button";
+import { DatasetSetup } from "@/components/admin/dataset-setup";
 import { GameComposer } from "@/components/admin/game-composer";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
-import { toggleEntityAction } from "@/lib/admin/actions";
+import { importPresetAction, toggleEntityAction } from "@/lib/admin/actions";
 import { proposeGamesForTopic } from "@/lib/admin/compose";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,11 @@ export default async function AdminTopicPage({
   const [topic] = await db.select().from(topics).where(eq(topics.slug, slug)).limit(1);
   if (!topic) notFound();
 
-  const composed = await proposeGamesForTopic(slug, "uk").catch(() => null);
+  // draft = created but no class/fields yet → show the setup builder
+  const sc = topic.sourceConfig as { def?: { fields?: unknown[] }; preset?: string } | null;
+  const needsSetup = !sc?.preset && !sc?.def?.fields?.length;
+
+  const composed = needsSetup ? null : await proposeGamesForTopic(slug, "uk").catch(() => null);
 
   const [rows, [{ n: total }]] = await Promise.all([
     db
@@ -57,21 +62,40 @@ export default async function AdminTopicPage({
         >
           <ArrowLeft size={15} /> Датасети
         </Link>
-        <Badge variant="muted">вимкнено: {total}</Badge>
+        {!needsSetup && <Badge variant="muted">вимкнено: {total}</Badge>}
       </div>
-      <h1 className="font-display text-2xl font-bold">{resolveText(topic.title, "uk")}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-bold">{resolveText(topic.title, "uk")}</h1>
+        {!needsSetup && (
+          <ActionButton
+            variant="secondary"
+            label="Синхронізувати з Wikidata"
+            icon="sync"
+            action={importPresetAction.bind(null, slug)}
+          />
+        )}
+      </div>
 
-      {/* pair composer: propose games from this dataset's fields */}
-      <section className="flex flex-col gap-2">
-        <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
-          <Wand2 size={14} /> Можливі ігри
-        </h2>
-        <GameComposer topicSlug={slug} proposals={composed?.proposals ?? []} />
-      </section>
+      {needsSetup ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
+            <Settings2 size={14} /> Налаштування датасету — знайди клас, зроби розвідку, познач поля
+          </h2>
+          <DatasetSetup topicSlug={slug} />
+        </section>
+      ) : (
+        <>
+          {/* pair composer: propose games from this dataset's fields */}
+          <section className="flex flex-col gap-2">
+            <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
+              <Wand2 size={14} /> Можливі ігри
+            </h2>
+            <GameComposer topicSlug={slug} proposals={composed?.proposals ?? []} />
+          </section>
 
-      <h2 className="mt-2 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted">
-        Айтеми
-      </h2>
+          <h2 className="mt-2 flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted">
+            Айтеми
+          </h2>
 
       {items.map((e) => {
         const label =
@@ -106,11 +130,13 @@ export default async function AdminTopicPage({
         );
       })}
 
-      <Pagination
-        page={page}
-        hasNext={hasNext}
-        makeHref={(p) => `/admin/topics/${slug}?page=${p}`}
-      />
+          <Pagination
+            page={page}
+            hasNext={hasNext}
+            makeHref={(p) => `/admin/topics/${slug}?page=${p}`}
+          />
+        </>
+      )}
     </>
   );
 }

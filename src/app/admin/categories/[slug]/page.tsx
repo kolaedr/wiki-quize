@@ -12,7 +12,7 @@ import {
   TogglePanel,
   type CategoryOption,
 } from "@/components/admin/category-controls";
-import { NewTopicForm } from "@/components/admin/new-topic-form";
+import { DraftDatasetForm } from "@/components/admin/draft-dataset-form";
 import { Badge } from "@/components/ui/badge";
 import { resolveText } from "@/i18n/locales";
 
@@ -121,7 +121,7 @@ export default async function AdminCategoryPage({
         />
 
         <TogglePanel label="Додати датасет (новий, з Wikidata)">
-          <NewTopicForm categoryId={cat.id} />
+          <DraftDatasetForm categoryId={cat.id} />
         </TogglePanel>
       </section>
     </>

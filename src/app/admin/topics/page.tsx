@@ -8,7 +8,7 @@ import { deleteTopicAction, importPresetAction, resetContentAction } from "@/lib
 import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
 import { CategorySelect } from "@/components/admin/category-controls";
-import { NewTopicForm } from "@/components/admin/new-topic-form";
+import { DraftDatasetForm } from "@/components/admin/draft-dataset-form";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -134,9 +134,9 @@ export default async function AdminTopicsPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
-          Нова тема (no-code: клас Wikidata + поля → ігри автоматично)
+          Новий датасет
         </h2>
-        <NewTopicForm />
+        <DraftDatasetForm />
       </section>
     </>
   );
