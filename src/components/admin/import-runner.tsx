@@ -2,86 +2,160 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Check, Circle, Loader2, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { importTickAction, startImportJobAction } from "@/lib/admin/actions";
-import type { JobProgress } from "@/lib/ingest/job";
+import { Input } from "@/components/ui/input";
+import { getJobAction, importTickAction, startImportJobAction } from "@/lib/admin/actions";
+import type { JobView } from "@/lib/ingest/job";
 
 /**
- * Runs a batched import as a client-driven loop: start the job, then call one
- * tick at a time (each = one sitelinks band, a short request) with a progress
- * bar — so nothing hangs for minutes. Used after dataset setup (autoStart) and
- * as the "Синхронізувати" control on a configured dataset.
+ * CONTROLLED batched import. Starting an import creates a job whose batches
+ * (sitelinks bands) show as a table; the admin chooses how many batches to run
+ * now (1 / N / all) and each run marks them off. Every batch is a short request
+ * — nothing hangs, and it's steppable for testing.
  */
 export function ImportRunner({
   topicSlug,
   autoStart = false,
-  label = "Синхронізувати з Wikidata",
+  label = "Почати імпорт",
 }: {
   topicSlug: string;
   autoStart?: boolean;
   label?: string;
 }) {
   const router = useRouter();
-  const [progress, setProgress] = useState<JobProgress | null>(null);
+  const [view, setView] = useState<JobView | null>(null);
   const [running, setRunning] = useState(false);
-  const started = useRef(false);
+  const [n, setN] = useState(1);
+  const [err, setErr] = useState<string | null>(null);
+  const created = useRef(false);
 
-  const run = useCallback(async () => {
-    if (running) return;
-    setRunning(true);
-    setProgress(null);
+  const createJob = useCallback(async () => {
+    setErr(null);
     const s = await startImportJobAction(topicSlug);
     if (!s.ok || !s.jobId) {
-      setProgress({ jobId: "", status: "failed", phase: "done", step: 0, totalSteps: 1, accepted: 0, done: true, message: s.message });
-      setRunning(false);
+      setErr(s.message ?? "не вдалося створити джоб");
       return;
     }
-    let p: JobProgress;
-    do {
-      p = await importTickAction(s.jobId);
-      setProgress(p);
-    } while (!p.done);
-    setRunning(false);
-    if (p.status === "done") router.refresh();
-  }, [topicSlug, running, router]);
+    setView(await getJobAction(s.jobId));
+  }, [topicSlug]);
 
   useEffect(() => {
-    if (autoStart && !started.current) {
-      started.current = true;
-      run();
+    if (autoStart && !created.current) {
+      created.current = true;
+      createJob();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
 
-  const pct = progress ? Math.round((progress.step / progress.totalSteps) * 100) : running ? 5 : 0;
-  const failed = progress?.status === "failed";
-  const done = progress?.status === "done";
+  const runBatches = async (count: number) => {
+    if (!view || running || view.done) return;
+    setRunning(true);
+    let v = view;
+    for (let i = 0; i < count && !v.done; i++) {
+      v = await importTickAction(v.jobId);
+      setView(v);
+    }
+    setRunning(false);
+    if (v.done && v.status === "done") router.refresh();
+  };
+
+  if (!view)
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <Button size="sm" variant="secondary" onClick={createJob}>
+          <Play size={13} /> {label}
+        </Button>
+        {err && <span className="text-xs text-danger">{err}</span>}
+      </div>
+    );
+
+  const totalBands = view.bands.length;
+  const remaining = totalBands - view.bandIndex + (view.phase === "done" ? 0 : 1); // + finalize
+  const pct = Math.round((view.bandIndex / (totalBands + 1)) * 100);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      {!running && (!progress || failed) && (
-        <Button size="sm" variant="secondary" onClick={run}>
-          <RefreshCw size={13} /> {label}
-        </Button>
-      )}
-      {(running || progress) && (
-        <>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-accent-soft">
-            <div
-              className={`h-full transition-all ${failed ? "bg-danger" : "bg-accent"}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <span
-            className={`flex items-center gap-1.5 text-xs ${
-              failed ? "text-danger" : done ? "text-success" : "text-muted"
-            }`}
-          >
-            {running && <Loader2 size={12} className="animate-spin" />}
-            {progress?.message ?? "запуск батчів…"}
+    <div className="glass-card flex w-full max-w-md flex-col gap-2 p-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-semibold text-fg">
+          Джоб імпорту · {view.accepted} айтемів
+        </span>
+        <span
+          className={
+            view.status === "failed"
+              ? "text-danger"
+              : view.status === "done"
+                ? "text-success"
+                : "text-muted"
+          }
+        >
+          {view.status}
+        </span>
+      </div>
+
+      {/* progress bar */}
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-accent-soft">
+        <div
+          className={`h-full transition-all ${view.status === "failed" ? "bg-danger" : "bg-accent"}`}
+          style={{ width: `${view.done ? 100 : pct}%` }}
+        />
+      </div>
+
+      {/* batch table */}
+      <div className="max-h-48 overflow-y-auto rounded-lg border border-line/60 text-xs">
+        {view.bands.map((b, i) => {
+          const done = i < view.bandIndex;
+          const current = i === view.bandIndex && view.phase === "fetch";
+          return (
+            <div key={i} className="flex items-center gap-2 border-t border-line/40 p-1.5 first:border-t-0">
+              {done ? (
+                <Check size={12} className="text-success" />
+              ) : current && running ? (
+                <Loader2 size={12} className="animate-spin text-accent" />
+              ) : (
+                <Circle size={10} className={current ? "text-accent" : "text-muted"} />
+              )}
+              <span className={done ? "text-muted line-through" : current ? "text-fg" : "text-muted"}>
+                Батч {i + 1}: популярність {b.max ? `${b.min}–${b.max}` : `${b.min}+`}
+              </span>
+            </div>
+          );
+        })}
+        <div className="flex items-center gap-2 border-t border-line/40 p-1.5">
+          {view.phase === "done" ? (
+            <Check size={12} className="text-success" />
+          ) : (
+            <Circle size={10} className={view.phase === "finalize" ? "text-accent" : "text-muted"} />
+          )}
+          <span className={view.phase === "done" ? "text-muted line-through" : "text-muted"}>
+            Фінал: складність, чистка, ігри
           </span>
-        </>
+        </div>
+      </div>
+
+      {view.message && <p className="text-[11px] text-muted">{view.message}</p>}
+
+      {/* controls */}
+      {!view.done && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" disabled={running} onClick={() => runBatches(1)}>
+            {running ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}1 батч
+          </Button>
+          <span className="flex items-center gap-1">
+            <Input
+              type="number"
+              className="h-8 w-16"
+              value={n}
+              onChange={(e) => setN(Math.max(1, Number(e.target.value) || 1))}
+            />
+            <Button size="sm" variant="secondary" disabled={running} onClick={() => runBatches(n)}>
+              прогнати
+            </Button>
+          </span>
+          <Button size="sm" variant="ghost" disabled={running} onClick={() => runBatches(remaining + 1)}>
+            <RefreshCw size={12} /> усе
+          </Button>
+        </div>
       )}
     </div>
   );

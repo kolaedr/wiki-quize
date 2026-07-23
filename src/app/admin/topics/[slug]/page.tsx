@@ -70,7 +70,7 @@ export default async function AdminTopicPage({
         <h1 className="font-display text-2xl font-bold">{resolveText(topic.title, "uk")}</h1>
         {!needsSetup &&
           (isDef ? (
-            <ImportRunner topicSlug={slug} />
+            <ImportRunner topicSlug={slug} label="Синхронізувати з Wikidata" />
           ) : (
             <ActionButton
               variant="secondary"

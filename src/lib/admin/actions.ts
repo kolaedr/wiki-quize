@@ -18,7 +18,7 @@ import {
   type ProbeSample,
 } from "@/lib/ingest/probe";
 import { MIN_PUBLISHABLE_ITEMS, STARTER_GAMES, runImport } from "@/lib/ingest/run";
-import { importTick, startDefImportJob, type JobProgress } from "@/lib/ingest/job";
+import { getJob, importTick, startDefImportJob, type JobView } from "@/lib/ingest/job";
 import { getAdminSession } from "./guard";
 
 export interface ActionResult {
@@ -383,16 +383,22 @@ export async function startImportJobAction(topicSlug: string): Promise<StartJobR
   return "error" in r ? { ok: false, message: r.error } : { ok: true, jobId: r.jobId };
 }
 
-/** Run ONE batch of an import job. The client loops this until `done`. */
-export async function importTickAction(jobId: string): Promise<JobProgress> {
+/** Run ONE batch of an import job. The client calls this N times on demand. */
+export async function importTickAction(jobId: string): Promise<JobView> {
   if (!(await getAdminSession()))
-    return { jobId, status: "failed", phase: "done", step: 0, totalSteps: 1, accepted: 0, done: true, message: "forbidden" };
+    return { jobId, status: "failed", phase: "done", bandIndex: 0, bands: [], accepted: 0, done: true, message: "forbidden" };
   const p = await importTick(jobId);
   if (p.done) {
     revalidatePath("/admin");
     revalidatePath("/");
   }
   return p;
+}
+
+/** Read a job's current state (for the batch table), no work done. */
+export async function getJobAction(jobId: string): Promise<JobView | null> {
+  if (!(await getAdminSession())) return null;
+  return getJob(jobId);
 }
 
 /** NO-CODE builder: save a topic definition and run its first import. */

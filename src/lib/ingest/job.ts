@@ -30,15 +30,34 @@ interface Cursor {
 const BAND_STOPS = [2000, 800, 300, 150, 80, 50, 35, 25, 18, 12];
 const MIN_PUBLISHABLE = 8;
 
-export interface JobProgress {
+export interface JobView {
   jobId: string;
   status: string;
   phase: string;
-  step: number;
-  totalSteps: number;
+  /** how many bands are already processed */
+  bandIndex: number;
+  bands: Band[];
   accepted: number;
   done: boolean;
   message?: string;
+}
+
+const toView = (jobId: string, status: string, c: Cursor, message?: string): JobView => ({
+  jobId,
+  status,
+  phase: c.phase,
+  bandIndex: c.bandIndex,
+  bands: c.bands,
+  accepted: c.accepted,
+  done: status === "done" || status === "failed",
+  message,
+});
+
+/** Read a job's current state without doing work (for rendering the table). */
+export async function getJob(jobId: string): Promise<JobView | null> {
+  const [job] = await db.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
+  if (!job) return null;
+  return toView(jobId, job.status, job.cursor as unknown as Cursor);
 }
 
 /** Create a running import job for a def-topic; returns its id. */
@@ -73,22 +92,20 @@ export async function startDefImportJob(
   return { jobId: job.id };
 }
 
-/** Do ONE unit of work for the job and report progress. Idempotent-ish per tick. */
-export async function importTick(jobId: string): Promise<JobProgress> {
+/** Do ONE unit of work for the job and report the new state. */
+export async function importTick(jobId: string): Promise<JobView> {
   const [job] = await db.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
   if (!job)
-    return { jobId, status: "failed", phase: "done", step: 0, totalSteps: 1, accepted: 0, done: true, message: "джоб не знайдено" };
+    return { jobId, status: "failed", phase: "done", bandIndex: 0, bands: [], accepted: 0, done: true, message: "джоб не знайдено" };
   const cursor = job.cursor as unknown as Cursor;
-  const totalSteps = cursor.bands.length + 1;
 
-  if (job.status === "done" || cursor.phase === "done")
-    return { jobId, status: "done", phase: "done", step: totalSteps, totalSteps, accepted: cursor.accepted, done: true };
+  if (job.status === "done" || cursor.phase === "done") return toView(jobId, "done", cursor);
 
   const [topic] = await db.select().from(topics).where(eq(topics.id, job.topicId)).limit(1);
   const def = (topic?.sourceConfig as { def?: TopicDef } | null)?.def;
   if (!topic || !def) {
     await db.update(importJobs).set({ status: "failed", finishedAt: new Date() }).where(eq(importJobs.id, jobId));
-    return { jobId, status: "failed", phase: "done", step: 0, totalSteps, accepted: 0, done: true, message: "немає конфігу" };
+    return toView(jobId, "failed", cursor, "немає конфігу");
   }
 
   const locales = def.locales?.length ? def.locales : [...ACTIVE_LOCALES];
@@ -178,16 +195,7 @@ export async function importTick(jobId: string): Promise<JobProgress> {
         phase: bandIndex >= cursor.bands.length ? "finalize" : "fetch",
       };
       await db.update(importJobs).set({ cursor: next as unknown as object }).where(eq(importJobs.id, jobId));
-      return {
-        jobId,
-        status: "running",
-        phase: next.phase,
-        step: bandIndex,
-        totalSteps,
-        accepted: next.accepted,
-        done: false,
-        message: `батч ${bandIndex}/${cursor.bands.length} · ${next.accepted} айтемів`,
-      };
+      return toView(jobId, "running", next, `батч ${bandIndex}/${cursor.bands.length} · ${next.accepted} айтемів`);
     }
 
     // finalize
@@ -246,35 +254,18 @@ export async function importTick(jobId: string): Promise<JobProgress> {
         validationReport: { accepted: cursor.accepted, finishedAt: new Date().toISOString() },
       })
       .where(eq(topics.id, topic.id));
+    const doneCursor: Cursor = { ...cursor, phase: "done" };
     await db
       .update(importJobs)
-      .set({ status: "done", finishedAt: new Date(), cursor: { ...cursor, phase: "done" } as unknown as object })
+      .set({ status: "done", finishedAt: new Date(), cursor: doneCursor as unknown as object })
       .where(eq(importJobs.id, jobId));
 
-    return {
-      jobId,
-      status: "done",
-      phase: "done",
-      step: totalSteps,
-      totalSteps,
-      accepted: cursor.accepted,
-      done: true,
-      message: `готово: ${cursor.accepted} айтемів`,
-    };
+    return toView(jobId, "done", doneCursor, `готово: ${cursor.accepted} айтемів`);
   } catch (err) {
     await db
       .update(importJobs)
       .set({ status: "failed", finishedAt: new Date(), log: sql`${JSON.stringify([String(err)])}::jsonb` })
       .where(eq(importJobs.id, jobId));
-    return {
-      jobId,
-      status: "failed",
-      phase: "done",
-      step: 0,
-      totalSteps,
-      accepted: cursor.accepted,
-      done: true,
-      message: String(err).slice(0, 200),
-    };
+    return toView(jobId, "failed", cursor, String(err).slice(0, 200));
   }
 }
