@@ -1,0 +1,105 @@
+import Link from "next/link";
+import { sql } from "drizzle-orm";
+import { Database, Rows3 } from "lucide-react";
+import { db } from "@/db";
+import { topicEntities, topics } from "@/db/schema";
+import { resolveText } from "@/i18n/locales";
+import { importPresetAction } from "@/lib/admin/actions";
+import { PRESETS } from "@/lib/ingest/presets";
+import { ActionButton } from "@/components/admin/action-button";
+import { NewTopicForm } from "@/components/admin/new-topic-form";
+import { Button } from "@/components/ui/button";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 300; // imports run inside server actions
+
+/** Topics: import / resync by click, plus the no-code topic builder. */
+export default async function AdminTopicsPage() {
+  const [topicRows, counts] = await Promise.all([
+    db.select().from(topics).catch(() => []),
+    db
+      .select({ topicId: topicEntities.topicId, n: sql<number>`count(*)::int` })
+      .from(topicEntities)
+      .groupBy(topicEntities.topicId)
+      .catch(() => []),
+  ]);
+  const countByTopic = new Map(counts.map((c) => [c.topicId, c.n]));
+  const topicBySlug = new Map(topicRows.map((t) => [t.slug, t]));
+
+  return (
+    <>
+      <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
+        <Database size={20} /> Теми
+      </h1>
+
+      <section className="flex flex-col gap-3">
+        {[
+          ...topicRows.map((t) => ({
+            slug: t.slug,
+            title: t.title,
+            topic: t,
+            importKey: (t.sourceConfig as { preset?: string })?.preset ?? t.slug,
+          })),
+          ...Object.values(PRESETS)
+            .filter((p) => !topicBySlug.has(p.slug))
+            .map((p) => ({ slug: p.slug, title: p.title, topic: null, importKey: p.key })),
+        ].map(({ slug, title, topic, importKey }) => {
+          const report = topic?.validationReport as
+            | {
+                accepted?: number;
+                totalExisting?: number;
+                fieldCoverage?: Record<string, number>;
+              }
+            | null
+            | undefined;
+          return (
+            <div key={slug} className="glass-card flex flex-col gap-2 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{resolveText(title, "uk")}</p>
+                  <p className="text-xs text-muted">
+                    {topic
+                      ? `${topic.status} · ${countByTopic.get(topic.id) ?? 0} сутностей · синк: ${
+                          topic.syncedAt ? new Date(topic.syncedAt).toLocaleString("uk-UA") : "—"
+                        }`
+                      : "ще не імпортовано"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {topic && (
+                    <Button asChild size="sm" variant="ghost">
+                      <Link href={`/admin/topics/${slug}`}>
+                        <Rows3 size={13} /> Айтеми
+                      </Link>
+                    </Button>
+                  )}
+                  <ActionButton
+                    label={topic ? "Синхронізувати" : "Імпортувати"}
+                    action={importPresetAction.bind(null, importKey)}
+                  />
+                </div>
+              </div>
+              {report?.fieldCoverage && (
+                <p className="text-[11px] leading-4 text-muted">
+                  {report.totalExisting != null &&
+                    `Отримано ${report.accepted ?? 0} з ${report.totalExisting} існуючих · `}
+                  Покриття полів:{" "}
+                  {Object.entries(report.fieldCoverage)
+                    .map(([k, v]) => `${k} ${v}`)
+                    .join(" · ")}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
+          Нова тема (no-code: клас Wikidata + поля → ігри автоматично)
+        </h2>
+        <NewTopicForm />
+      </section>
+    </>
+  );
+}

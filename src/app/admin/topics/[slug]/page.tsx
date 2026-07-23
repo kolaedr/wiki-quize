@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { ImageOff } from "lucide-react";
-import { Breadcrumbs } from "@/components/breadcrumbs";
+import { ArrowLeft, ImageOff } from "lucide-react";
 import { db } from "@/db";
 import { topicEntities, topics } from "@/db/schema";
 import { ActionButton } from "@/components/admin/action-button";
@@ -10,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
 import { toggleEntityAction } from "@/lib/admin/actions";
-import { getAdminSession } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 const PAGE = 20;
@@ -23,7 +21,6 @@ export default async function AdminTopicPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ page?: string }>;
 }) {
-  if (!(await getAdminSession())) redirect("/");
   const { slug } = await params;
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1);
@@ -49,54 +46,57 @@ export default async function AdminTopicPage({
 
   return (
     <>
-      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <Breadcrumbs items={[{ href: "/admin", label: "Адмінка" }, { label: resolveText(topic.title, "uk") }]} />
-          <Badge variant="muted">вимкнено: {total}</Badge>
-        </div>
-        <h1 className="font-display text-2xl font-bold">
-          {resolveText(topic.title, "uk")} — айтеми
-        </h1>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/admin/topics"
+          className="flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-fg"
+        >
+          <ArrowLeft size={15} /> Теми
+        </Link>
+        <Badge variant="muted">вимкнено: {total}</Badge>
+      </div>
+      <h1 className="font-display text-2xl font-bold">
+        {resolveText(topic.title, "uk")} — айтеми
+      </h1>
 
-        {items.map((e) => {
-          const label =
-            (e.labels as Record<string, string>).uk ?? (e.labels as Record<string, string>).en;
-          return (
-            <div
-              key={e.id}
-              className={`glass-card flex items-center gap-3 p-3 ${e.excluded ? "opacity-50" : ""}`}
-            >
-              {e.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-                <img src={e.imageUrl} alt="" className="h-10 w-14 rounded object-contain" />
-              ) : (
-                <span className="flex h-10 w-14 items-center justify-center rounded bg-accent-soft">
-                  <ImageOff size={14} className="text-muted" />
-                </span>
-              )}
-              <span className="flex flex-1 flex-col">
-                <span className="text-sm font-semibold">{label}</span>
-                <span className="text-[11px] text-muted">
-                  {e.wikidataQid} · sitelinks {e.sitelinks} · складність{" "}
-                  {Math.round((e.difficultyScore ?? 0) * 100)}%
-                </span>
+      {items.map((e) => {
+        const label =
+          (e.labels as Record<string, string>).uk ?? (e.labels as Record<string, string>).en;
+        return (
+          <div
+            key={e.id}
+            className={`glass-card flex items-center gap-3 p-3 ${e.excluded ? "opacity-50" : ""}`}
+          >
+            {e.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
+              <img src={e.imageUrl} alt="" className="h-10 w-14 rounded object-contain" />
+            ) : (
+              <span className="flex h-10 w-14 items-center justify-center rounded bg-accent-soft">
+                <ImageOff size={14} className="text-muted" />
               </span>
-              {e.excluded && <Badge variant="danger">вимкнено</Badge>}
-              <ActionButton
-                variant="ghost"
-                label={e.excluded ? "Увімкнути" : "Вимкнути"}
-                action={toggleEntityAction.bind(null, e.id)}
-              />
-            </div>
-          );
-        })}
+            )}
+            <span className="flex flex-1 flex-col">
+              <span className="text-sm font-semibold">{label}</span>
+              <span className="text-[11px] text-muted">
+                {e.wikidataQid} · sitelinks {e.sitelinks} · складність{" "}
+                {Math.round((e.difficultyScore ?? 0) * 100)}%
+              </span>
+            </span>
+            {e.excluded && <Badge variant="danger">вимкнено</Badge>}
+            <ActionButton
+              variant="ghost"
+              label={e.excluded ? "Увімкнути" : "Вимкнути"}
+              action={toggleEntityAction.bind(null, e.id)}
+            />
+          </div>
+        );
+      })}
 
-        <Pagination
-          page={page}
-          hasNext={hasNext}
-          makeHref={(p) => `/admin/topics/${slug}?page=${p}`}
-        />
-      </main>
+      <Pagination
+        page={page}
+        hasNext={hasNext}
+        makeHref={(p) => `/admin/topics/${slug}?page=${p}`}
+      />
     </>
   );
 }
