@@ -259,8 +259,11 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
             <span className="text-xs font-semibold text-fg">Які поля тягнути?</span>
             <p className="text-[11px] text-muted">
               Назва тягнеться завжди. Зображення позначені за замовчуванням; решту
-              обирай за потреби. «Заповнено» = у скількох із топ-{probe?.sampleSize ?? 12}
-              айтемів є це поле.
+              обирай за потреби. «Заповнено» = у скількох із топ-{probe?.sampleSize ?? 3}
+              айтемів є поле.
+              {probe?.sampleLabels?.length
+                ? ` Приклади з: ${probe.sampleLabels.join(", ")}.`
+                : ""}
             </p>
             <div className="max-h-72 overflow-y-auto rounded-lg border border-line/60">
               <table className="w-full text-left text-xs">

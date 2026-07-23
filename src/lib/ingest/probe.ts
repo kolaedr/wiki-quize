@@ -189,33 +189,40 @@ LIMIT 120`;
 
 export interface DiscoveredFields {
   sampleSize: number;
+  /** labels of the sampled entities the examples came from */
+  sampleLabels: string[];
   fields: ProbeField[];
 }
 
-/** One entity's filled properties — the proven-fast single-entity query. */
+/**
+ * One entity's filled properties. GROUP BY property → ONE row per property with
+ * a sample value, so nothing is truncated (a plain LIMIT over raw value rows
+ * dropped fields at random — e.g. the flag on a rich entity). One entity, light.
+ */
 async function entityProps(qid: string): Promise<ProbeField[]> {
   // NB: the label service names its output ?<var>Label — the property var MUST
   // be ?prop so ?propLabel binds (a ?p would give ?pLabel → blank).
   const rows = await sparqlQuery(`
-SELECT ?prop ?propLabel ?ptype ?v ?vLabel WHERE {
+SELECT ?prop ?propLabel ?ptype (SAMPLE(STR(?v)) AS ?ex) WHERE {
   wd:${qid} ?pd ?v .
   ?prop wikibase:directClaim ?pd ; wikibase:propertyType ?ptype .
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} LIMIT 400`);
-  const seen = new Set<string>();
+}
+GROUP BY ?prop ?propLabel ?ptype
+LIMIT 500`);
   const out: ProbeField[] = [];
   for (const r of rows) {
     const prop = qidFromUri(r.prop?.value ?? "");
-    if (!/^P\d+$/.test(prop) || seen.has(prop)) continue;
-    seen.add(prop);
+    if (!/^P\d+$/.test(prop)) continue;
     const kind = TYPE_TO_KIND[r.ptype?.value ?? ""] ?? null;
+    const ex = r.ex?.value;
     out.push({
       prop,
       label: r.propLabel?.value ?? prop,
       kind,
       coverage: 0,
-      example: kind && kind !== "image" ? (r.vLabel?.value ?? r.v?.value) : undefined,
-      exampleImage: kind === "image" && r.v?.value ? commonsThumb(r.v.value, 96) : undefined,
+      example: kind === "number" || kind === "date" ? ex : undefined,
+      exampleImage: kind === "image" && ex ? commonsThumb(ex, 96) : undefined,
     });
   }
   return out;
@@ -230,14 +237,16 @@ SELECT ?prop ?propLabel ?ptype ?v ?vLabel WHERE {
 export async function discoverFields(classQids: string[]): Promise<DiscoveredFields> {
   const N = 3;
   const top = await sparqlQuery(`
-SELECT ?item WHERE {
-  ${classUnion(classQids)}
-  ?item wikibase:sitelinks ?sl .
-}
-ORDER BY DESC(?sl)
-LIMIT ${N}`);
-  const qids = top.map((r) => qidFromUri(r.item?.value ?? "")).filter((q) => QID_RE.test(q));
-  if (qids.length === 0) return { sampleSize: 0, fields: [] };
+SELECT ?item ?itemLabel WHERE {
+  { SELECT ?item ?sl WHERE { ${classUnion(classQids)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT ${N} }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}`);
+  const picks = top
+    .map((r) => ({ qid: qidFromUri(r.item?.value ?? ""), label: r.itemLabel?.value }))
+    .filter((p) => QID_RE.test(p.qid));
+  const qids = picks.map((p) => p.qid);
+  const sampleLabels = picks.map((p) => p.label ?? p.qid);
+  if (qids.length === 0) return { sampleSize: 0, sampleLabels: [], fields: [] };
 
   const perEntity = await Promise.all(qids.map((q) => entityProps(q)));
   const agg = new Map<string, ProbeField & { count: number }>();
@@ -258,7 +267,7 @@ LIMIT ${N}`);
   const fields = [...agg.values()]
     .map(({ count, ...f }) => ({ ...f, coverage: count / qids.length }))
     .sort((a, b) => rank(a.kind) - rank(b.kind) || b.coverage - a.coverage);
-  return { sampleSize: qids.length, fields };
+  return { sampleSize: qids.length, sampleLabels, fields };
 }
 
 export interface SampleEntity {

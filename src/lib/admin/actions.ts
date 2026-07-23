@@ -224,6 +224,8 @@ export interface ProbeResult {
   total?: number;
   /** how many top items the fields were sampled from */
   sampleSize?: number;
+  /** labels of the sampled items (so the admin knows where examples came from) */
+  sampleLabels?: string[];
   /** filled fields across the sampled items (coverage + previews) */
   fields?: ProbeField[];
 }
@@ -256,6 +258,7 @@ export async function probeClassAction(
     ok: true,
     total,
     sampleSize: disc?.sampleSize,
+    sampleLabels: disc?.sampleLabels ?? [],
     fields: disc?.fields ?? [],
     message: disc ? undefined : "Поля не завантажились — спробуй ще раз.",
   };
