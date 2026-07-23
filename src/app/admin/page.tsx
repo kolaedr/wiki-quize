@@ -36,7 +36,7 @@ export default async function AdminPage() {
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4">
+      <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 pt-4">
         <Link href="/" className="flex items-center gap-1 text-sm text-muted hover:text-fg">
           <ChevronLeft size={16} />
           WikiQuize
@@ -44,7 +44,7 @@ export default async function AdminPage() {
         <span className="glass-card px-3 py-1 text-xs text-accent">admin</span>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">
         {/* Topics: import presets by click */}
         <section className="flex flex-col gap-3">
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted">

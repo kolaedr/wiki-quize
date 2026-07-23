@@ -3,6 +3,8 @@
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { Flame, Heart, RotateCcw, Sparkles, MoonStar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 /** Shared HUD bits for all game boards: status row, progress, streak, result screen. */
 
@@ -40,12 +42,7 @@ export function StatusBar({
           </span>
         </div>
       </div>
-      <div className="mb-3 h-1 overflow-hidden rounded-full bg-accent-soft">
-        <div
-          className="h-full rounded-full bg-accent transition-all"
-          style={{ width: `${(idx / total) * 100}%` }}
-        />
-      </div>
+      <Progress value={(idx / total) * 100} className="mb-3 h-1" />
     </>
   );
 }
@@ -82,7 +79,7 @@ export function ResultScreen({
 }) {
   const t = useTranslations("game");
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
       <div className="glass-card shadow-glow flex w-full max-w-sm flex-col items-center gap-3 p-8">
         {lives > 0 ? (
           <Sparkles size={44} className="text-accent" />
@@ -94,13 +91,10 @@ export function ResultScreen({
         <p className="text-sm text-muted">
           {t("bestStreak")}: {best}
         </p>
-        <button
-          onClick={onRestart}
-          className="mt-2 flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white active:scale-95"
-        >
+        <Button onClick={onRestart} size="lg" className="mt-2">
           <RotateCcw size={15} />
           {t("playAgain")}
-        </button>
+        </Button>
       </div>
     </main>
   );

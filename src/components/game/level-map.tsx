@@ -23,7 +23,7 @@ export function LevelMap({ slug, title, icon, levels }: Props) {
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4">
+      <header className="mx-auto flex w-full max-w-2xl items-center justify-between px-5 pt-4">
         <Link
           href="/"
           className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-fg"
@@ -33,7 +33,7 @@ export function LevelMap({ slug, title, icon, levels }: Props) {
         </Link>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
         <div className="flex items-center gap-3">
           <GameIcon name={icon} size={28} />
           <div>
@@ -42,7 +42,7 @@ export function LevelMap({ slug, title, icon, levels }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 md:grid-cols-8">
           {Array.from({ length: levels }, (_, i) => i + 1).map((n) => {
             const unlocked = mounted && progress.isUnlocked(slug, n);
             const done = mounted && progress.isCompleted(slug, n);

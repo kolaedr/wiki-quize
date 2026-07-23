@@ -4,6 +4,7 @@ import { ChevronRight, Globe2, Play, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserButton } from "@/components/auth/user-button";
 import { GameIcon } from "@/components/game-icon";
+import { Button } from "@/components/ui/button";
 import { resolveText } from "@/i18n/locales";
 import { getAdminSession } from "@/lib/admin/guard";
 import { listCategories } from "@/lib/deck/from-db";
@@ -21,7 +22,7 @@ export default async function Home() {
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4">
+      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pt-4">
         <span className="font-display text-lg font-semibold tracking-tight">
           {t("app.name")}
         </span>
@@ -40,7 +41,7 @@ export default async function Home() {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-6">
+      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="font-display max-w-xs bg-gradient-to-br from-fg via-fg to-accent bg-clip-text text-3xl font-bold leading-tight tracking-tight text-transparent">
             {t("app.tagline")}
@@ -55,6 +56,7 @@ export default async function Home() {
             <h2 className="font-display px-1 text-sm font-semibold uppercase tracking-wide text-muted">
               {t("home.categories")}
             </h2>
+            <div className="grid gap-3 sm:grid-cols-2">
             {categories.map((c) => (
               <Link
                 key={c.slug}
@@ -71,6 +73,7 @@ export default async function Home() {
                 <ChevronRight size={18} className="text-muted" />
               </Link>
             ))}
+            </div>
           </section>
         ) : (
           <div className="flex flex-col items-center gap-4">
@@ -82,13 +85,12 @@ export default async function Home() {
                 <Globe2 size={40} className="text-accent" />
               </div>
             </div>
-            <Link
-              href="/play"
-              className="shadow-glow flex items-center gap-2 rounded-full bg-accent px-8 py-4 text-sm font-semibold text-white transition-transform active:scale-95"
-            >
-              <Play size={16} className="fill-white" />
-              {t("home.tryDemo")}
-            </Link>
+            <Button asChild size="lg">
+              <Link href="/play">
+                <Play size={16} className="fill-white" />
+                {t("home.tryDemo")}
+              </Link>
+            </Button>
           </div>
         )}
       </main>

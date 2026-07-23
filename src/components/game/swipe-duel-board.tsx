@@ -50,7 +50,7 @@ export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
 
   return (
     <main
-      className="flex min-h-0 flex-1 flex-col px-4 pb-4 outline-none"
+      className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-4 outline-none"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "ArrowLeft") pick(card.options[0]);

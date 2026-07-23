@@ -33,7 +33,7 @@ export default async function CategoryPage({
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4">
+      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pt-4">
         <Link
           href="/"
           className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-fg"
@@ -43,7 +43,7 @@ export default async function CategoryPage({
         </Link>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
         <div className="flex items-center gap-3">
           <GameIcon name={(data.topic.sourceConfig as { icon?: string })?.icon} size={28} />
           <h1 className="font-display text-2xl font-bold">
@@ -51,6 +51,7 @@ export default async function CategoryPage({
           </h1>
         </div>
 
+        <div className="grid gap-3 sm:grid-cols-2">
         {data.items.map((g) => (
           <Link
             key={g.slug}
@@ -67,6 +68,7 @@ export default async function CategoryPage({
             <ChevronRight size={18} className="text-muted" />
           </Link>
         ))}
+        </div>
 
         <Pagination
           page={data.page}

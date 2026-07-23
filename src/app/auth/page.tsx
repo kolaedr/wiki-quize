@@ -4,6 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { ChevronLeft, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/auth-client";
 
 type Mode = "signin" | "signup";
@@ -33,88 +37,70 @@ export default function AuthPage() {
     else router.push("/");
   };
 
-  const google = async () => {
-    setError(null);
-    await authClient.signIn.social({ provider: "google", callbackURL: "/" });
-  };
+  const form = (
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      {mode === "signup" && (
+        <Input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t("name")}
+          autoComplete="nickname"
+        />
+      )}
+      <Input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder={t("email")}
+        autoComplete="email"
+      />
+      <Input
+        type="password"
+        required
+        minLength={8}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder={t("password")}
+        autoComplete={mode === "signup" ? "new-password" : "current-password"}
+      />
+      {error && <p className="text-xs text-danger">{error}</p>}
+      <Button type="submit" size="lg" disabled={busy} className="mt-1">
+        {busy && <Loader2 size={15} className="animate-spin" />}
+        {t(mode)}
+      </Button>
+    </form>
+  );
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4">
-        <Link href="/" className="text-sm text-muted hover:text-fg">
-          ← WikiQuize
+      <header className="mx-auto flex w-full max-w-2xl items-center justify-between px-5 pt-4">
+        <Link href="/" className="flex items-center gap-1 text-sm text-muted hover:text-fg">
+          <ChevronLeft size={16} />
+          WikiQuize
         </Link>
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center px-6">
         <div className="glass-card w-full max-w-sm p-6">
-          {/* mode switch */}
-          <div className="mb-6 grid grid-cols-2 gap-1 rounded-full bg-accent-soft p-1 text-sm">
-            {(["signin", "signup"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => {
-                  setMode(m);
-                  setError(null);
-                }}
-                className={`rounded-full py-2 font-medium transition-colors ${
-                  mode === m ? "bg-accent text-white" : "text-muted hover:text-fg"
-                }`}
-              >
-                {t(m)}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={submit} className="flex flex-col gap-3">
-            {mode === "signup" && (
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t("name")}
-                autoComplete="nickname"
-                className="glass-card w-full px-4 py-3 text-sm outline-none placeholder:text-muted focus:border-accent"
-              />
-            )}
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t("email")}
-              autoComplete="email"
-              className="glass-card w-full px-4 py-3 text-sm outline-none placeholder:text-muted focus:border-accent"
-            />
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t("password")}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              className="glass-card w-full px-4 py-3 text-sm outline-none placeholder:text-muted focus:border-accent"
-            />
-
-            {error && <p className="text-xs text-danger">{error}</p>}
-
-            <button
-              type="submit"
-              disabled={busy}
-              className="mt-1 rounded-full bg-accent py-3 text-sm font-semibold text-white transition-transform active:scale-95 disabled:opacity-50"
-            >
-              {busy ? "…" : t(mode)}
-            </button>
-          </form>
+          <Tabs value={mode} onValueChange={(v) => { setMode(v as Mode); setError(null); }}>
+            <TabsList>
+              <TabsTrigger value="signin">{t("signin")}</TabsTrigger>
+              <TabsTrigger value="signup">{t("signup")}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="signin">{form}</TabsContent>
+            <TabsContent value="signup">{form}</TabsContent>
+          </Tabs>
 
           {googleEnabled && (
-            <button
-              onClick={google}
-              className="glass-card mt-3 w-full py-3 text-sm font-medium text-muted transition-colors hover:text-fg"
+            <Button
+              variant="glass"
+              className="mt-3 w-full"
+              onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
             >
               {t("google")}
-            </button>
+            </Button>
           )}
 
           <p className="mt-4 text-center text-xs leading-5 text-muted">{t("why")}</p>

@@ -18,6 +18,8 @@
 - [x] Better Auth: email+password + Google OAuth, таблиці в нашій БД, ролі `user|admin`
 - [x] Auth UI: сторінка `/auth` (вхід/реєстрація, Google опційно через `NEXT_PUBLIC_AUTH_GOOGLE`), кнопка акаунта/виходу в хедері
 - [x] Базовий layout: `100dvh` app-shell, safe-area, next-intl (EN)
+- [x] **UI-кіт shadcn-стилю** (`components/ui/*`: Button/Input/Badge/Progress/Skeleton/Tabs на cva+radix, мапнуті на наші токени; реєстр shadcn з пісочниці недоступний — компоненти написані вручну 1:1 за патерном, `npx shadcn add` далі працює через components.json)
+- [x] **Десктоп-лейаут**: контейнери max-w (3xl каталог/кабінет, 4xl адмінка, lg гра), гріди sm:grid-cols-2 для категорій/ігор, md:grid-cols-2 у кабінеті, рівні до 8 колонок
 - [x] PWA: manifest + іконка
 - [x] PWA: service worker (`public/sw.js`: cache-first статика, network-first сторінки з фолбеком)
 

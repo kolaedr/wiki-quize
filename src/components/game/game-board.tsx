@@ -27,7 +27,7 @@ export function GameBoard({ title, cards, onFinish }: Props) {
   }
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col px-4 pb-4">
+    <main className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-4">
       <StatusBar title={title} idx={s.idx} total={cards.length} lives={s.lives} maxLives={s.maxLives} />
 
       {/* card */}

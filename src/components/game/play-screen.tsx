@@ -87,7 +87,7 @@ export function PlayScreen({
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4">
+      <header className="mx-auto flex w-full max-w-lg items-center justify-between px-5 pt-4">
         <Link
           href={backHref}
           className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-fg"

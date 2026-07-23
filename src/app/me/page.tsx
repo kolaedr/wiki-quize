@@ -88,7 +88,7 @@ export default async function MePage({
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4">
+      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pt-4">
         <Link href="/" className="flex items-center gap-1 text-sm text-muted hover:text-fg">
           <ChevronLeft size={16} />
           {t("app.name")}
@@ -96,7 +96,7 @@ export default async function MePage({
         <SignOutButton />
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">
         {/* profile + totals */}
         <div className="glass-card flex flex-col gap-4 p-5">
           <div>
@@ -123,6 +123,7 @@ export default async function MePage({
           </div>
         </div>
 
+        <div className="grid gap-6 md:grid-cols-2">
         {/* best per game */}
         {best.length > 0 && (
           <section className="flex flex-col gap-3">
@@ -165,6 +166,8 @@ export default async function MePage({
             </div>
           </section>
         )}
+
+        </div>
 
         {/* recent sessions (paginated) */}
         <section className="flex flex-col gap-3">
