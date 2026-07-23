@@ -9,23 +9,36 @@ interface Props {
   label: string;
   action: () => Promise<ActionResult>;
   variant?: "default" | "secondary" | "ghost";
+  /** destructive: require a second click ("точно?") before firing */
+  confirm?: boolean;
 }
 
 /** Button bound to a server action, with pending state + inline result message. */
-export function ActionButton({ label, action, variant = "default" }: Props) {
+export function ActionButton({ label, action, variant = "default", confirm = false }: Props) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
+  const [armed, setArmed] = useState(false);
+
+  const run = () => {
+    if (confirm && !armed) {
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    start(async () => setResult(await action()));
+  };
 
   return (
     <span className="flex flex-col items-end gap-1">
       <Button
         size="sm"
-        variant={variant}
+        variant={armed ? "default" : variant}
         disabled={pending}
-        onClick={() => start(async () => setResult(await action()))}
+        onClick={run}
+        onBlur={() => setArmed(false)}
       >
         {pending && <Loader2 size={13} className="animate-spin" />}
-        {label}
+        {armed ? "Точно? Ще раз" : label}
       </Button>
       {result && (
         <span

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { games, topicEntities, topics } from "@/db/schema";
+import { categories, games, topicEntities, topics } from "@/db/schema";
 import { validateDef, type TopicDef } from "@/lib/ingest/def";
 import {
   discoverProperties,
@@ -180,6 +180,78 @@ export async function createTopicAction(def: TopicDef): Promise<ActionResult> {
     };
   } catch (err) {
     return { ok: false, message: String(err).slice(0, 300) };
+  }
+}
+
+/** Create a browse category (top-level grouping of datasets). */
+export async function createCategoryAction(
+  slug: string,
+  titleEn: string,
+  titleUk: string,
+  icon: string,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const s = slug.trim().toLowerCase();
+  if (!/^[a-z0-9-]{2,40}$/.test(s)) return { ok: false, message: "slug: a-z, 0-9, -" };
+  if (!titleEn.trim()) return { ok: false, message: "Назва (EN) обовʼязкова" };
+  try {
+    await db
+      .insert(categories)
+      .values({
+        slug: s,
+        title: { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) },
+        icon: icon || null,
+      })
+      .onConflictDoUpdate({
+        target: categories.slug,
+        set: {
+          title: { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) },
+          icon: icon || null,
+        },
+      });
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "категорію збережено" };
+  } catch (err) {
+    return { ok: false, message: String(err).slice(0, 200) };
+  }
+}
+
+/** Assign a dataset (topic) to a category, or clear it (categoryId=""). */
+export async function setTopicCategoryAction(
+  topicSlug: string,
+  categoryId: string,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    await db
+      .update(topics)
+      .set({ categoryId: categoryId || null })
+      .where(eq(topics.slug, topicSlug));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "категорію призначено" };
+  } catch (err) {
+    return { ok: false, message: String(err).slice(0, 200) };
+  }
+}
+
+/**
+ * Clean reset: wipe ALL content (categories, datasets, entities, games, and —
+ * via cascade — their sessions/jobs/reports) so it can be rebuilt structurally
+ * through the builder. Auth data is untouched.
+ */
+export async function resetContentAction(): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    await db.delete(games); // sessions/reports/challenges cascade off games
+    await db.delete(topics); // entities + import jobs cascade off topics
+    await db.delete(categories);
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "базу контенту очищено" };
+  } catch (err) {
+    return { ok: false, message: String(err).slice(0, 200) };
   }
 }
 

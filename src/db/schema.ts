@@ -51,12 +51,34 @@ export const importJobStatus = pgEnum("import_job_status", [
   "failed",
 ]);
 
+/**
+ * Top-level browse grouping: a CATEGORY holds several related datasets (topics)
+ * and the games built on them. E.g. "Auto" = { car brands, car models }.
+ * Catalog sorts by category; cross-dataset games live within one category.
+ */
+export const categories = pgTable(
+  "categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull().unique(),
+    title: jsonb("title").$type<LocalizedText>().notNull(),
+    icon: text("icon"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("categories_sort_idx").on(t.sortOrder)],
+);
+
 /** A dataset of Wikidata entities + field mapping. Knows nothing about gameplay. */
 export const topics = pgTable(
   "topics",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     slug: text("slug").notNull().unique(),
+    /** Browse grouping — datasets of one subject share a category. */
+    categoryId: uuid("category_id").references(() => categories.id, {
+      onDelete: "set null",
+    }),
     title: jsonb("title").$type<LocalizedText>().notNull(),
     description: jsonb("description").$type<LocalizedText>(),
     /** SPARQL preset / Wikidata classes / property mapping. */
@@ -70,7 +92,10 @@ export const topics = pgTable(
     syncedAt: timestamp("synced_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("topics_status_idx").on(t.status)],
+  (t) => [
+    index("topics_status_idx").on(t.status),
+    index("topics_category_idx").on(t.categoryId),
+  ],
 );
 
 /** One Wikidata entity inside a topic. */

@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { sql } from "drizzle-orm";
-import { Database, Rows3 } from "lucide-react";
+import { asc, sql } from "drizzle-orm";
+import { Database, FolderTree, Rows3 } from "lucide-react";
 import { db } from "@/db";
-import { topicEntities, topics } from "@/db/schema";
+import { categories, topicEntities, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
-import { importPresetAction } from "@/lib/admin/actions";
+import { importPresetAction, resetContentAction } from "@/lib/admin/actions";
 import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
+import { CategorySelect, NewCategoryForm } from "@/components/admin/category-controls";
 import { NewTopicForm } from "@/components/admin/new-topic-form";
 import { Button } from "@/components/ui/button";
 
@@ -15,22 +16,53 @@ export const maxDuration = 300; // imports run inside server actions
 
 /** Topics: import / resync by click, plus the no-code topic builder. */
 export default async function AdminTopicsPage() {
-  const [topicRows, counts] = await Promise.all([
+  const [topicRows, counts, categoryRows] = await Promise.all([
     db.select().from(topics).catch(() => []),
     db
       .select({ topicId: topicEntities.topicId, n: sql<number>`count(*)::int` })
       .from(topicEntities)
       .groupBy(topicEntities.topicId)
       .catch(() => []),
+    db.select().from(categories).orderBy(asc(categories.sortOrder)).catch(() => []),
   ]);
   const countByTopic = new Map(counts.map((c) => [c.topicId, c.n]));
   const topicBySlug = new Map(topicRows.map((t) => [t.slug, t]));
+  const categoryOptions = categoryRows.map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    title: resolveText(c.title, "uk"),
+  }));
 
   return (
     <>
-      <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
-        <Database size={20} /> Теми
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
+          <Database size={20} /> Датасети
+        </h1>
+        <ActionButton
+          variant="ghost"
+          confirm
+          label="Очистити базу"
+          action={resetContentAction}
+        />
+      </div>
+
+      {/* categories: top-level grouping of datasets */}
+      <section className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
+          <FolderTree size={14} /> Категорії (групують датасети в каталозі)
+        </h2>
+        {categoryOptions.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {categoryOptions.map((c) => (
+              <span key={c.id} className="rounded-full bg-accent-soft px-3 py-1 text-xs text-accent">
+                {c.title}
+              </span>
+            ))}
+          </div>
+        )}
+        <NewCategoryForm />
+      </section>
 
       <section className="flex flex-col gap-3">
         {[
@@ -66,6 +98,13 @@ export default async function AdminTopicsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {topic && (
+                    <CategorySelect
+                      topicSlug={slug}
+                      categoryId={topic.categoryId}
+                      options={categoryOptions}
+                    />
+                  )}
                   {topic && (
                     <Button asChild size="sm" variant="ghost">
                       <Link href={`/admin/topics/${slug}`}>

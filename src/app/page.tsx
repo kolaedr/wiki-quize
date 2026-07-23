@@ -38,7 +38,7 @@ export default async function Home() {
                 href={`/category/${c.slug}`}
                 className="glass-card flex items-center gap-4 p-4 transition-all hover:border-accent active:scale-[0.99]"
               >
-                <GameIcon name={(c.sourceConfig as { icon?: string })?.icon} />
+                <GameIcon name={c.icon} />
                 <span className="flex flex-1 flex-col">
                   <span className="font-semibold">{resolveText(c.title, locale)}</span>
                   <span className="text-xs text-muted">

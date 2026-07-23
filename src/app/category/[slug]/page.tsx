@@ -6,7 +6,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { GameIcon } from "@/components/game-icon";
 import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
-import { listGamesByTopic } from "@/lib/deck/from-db";
+import { loadCategoryPage } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ export default async function CategoryPage({
 
   let data;
   try {
-    data = await listGamesByTopic(slug, page);
+    data = await loadCategoryPage(slug, page);
   } catch {
     data = null;
   }
@@ -35,11 +35,11 @@ export default async function CategoryPage({
   return (
     <>
       <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
-        <Breadcrumbs items={[{ label: resolveText(data.topic.title, locale) }]} />
+        <Breadcrumbs items={[{ label: resolveText(data.title, locale) }]} />
         <div className="flex items-center gap-3">
-          <GameIcon name={(data.topic.sourceConfig as { icon?: string })?.icon} size={28} />
+          <GameIcon name={data.icon} size={28} />
           <h1 className="font-display text-2xl font-bold">
-            {resolveText(data.topic.title, locale)}
+            {resolveText(data.title, locale)}
           </h1>
         </div>
 

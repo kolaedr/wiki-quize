@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { games, topicEntities, topics } from "@/db/schema";
+import { categories, games, topicEntities, topics } from "@/db/schema";
 import type { LocalizedText } from "@/i18n/locales";
 import {
   buildBinaryDeck,
@@ -292,21 +292,70 @@ export async function listPublishedGames() {
   }
 }
 
-/** Categories = published topics with their published-game counts (home page). */
-export async function listCategories() {
+export interface CatalogEntry {
+  /** category slug OR (for uncategorized datasets) the topic slug */
+  slug: string;
+  title: LocalizedText;
+  icon?: string;
+  gamesCount: number;
+  kind: "category" | "topic";
+}
+
+/**
+ * Home catalog. CATEGORIES (each aggregating the published games of all its
+ * datasets) come first, then any published dataset NOT yet assigned to a
+ * category — so seeds stay visible during the migration to structured content.
+ */
+export async function listCategories(): Promise<CatalogEntry[]> {
   try {
-    return await db
-      .select({
-        slug: topics.slug,
-        title: topics.title,
-        sourceConfig: topics.sourceConfig,
-        gamesCount: sql<number>`count(${games.id})::int`,
-      })
-      .from(topics)
-      .leftJoin(games, and(eq(games.topicId, topics.id), eq(games.status, "published")))
-      .where(eq(topics.status, "published"))
-      .groupBy(topics.id)
-      .orderBy(desc(sql`count(${games.id})`));
+    const [cats, loose] = await Promise.all([
+      db
+        .select({
+          slug: categories.slug,
+          title: categories.title,
+          icon: categories.icon,
+          sortOrder: categories.sortOrder,
+          gamesCount: sql<number>`count(${games.id})::int`,
+        })
+        .from(categories)
+        .leftJoin(topics, eq(topics.categoryId, categories.id))
+        .leftJoin(games, and(eq(games.topicId, topics.id), eq(games.status, "published")))
+        .groupBy(categories.id)
+        .orderBy(categories.sortOrder),
+      db
+        .select({
+          slug: topics.slug,
+          title: topics.title,
+          sourceConfig: topics.sourceConfig,
+          gamesCount: sql<number>`count(${games.id})::int`,
+        })
+        .from(topics)
+        .leftJoin(games, and(eq(games.topicId, topics.id), eq(games.status, "published")))
+        .where(and(eq(topics.status, "published"), isNull(topics.categoryId)))
+        .groupBy(topics.id)
+        .orderBy(desc(sql`count(${games.id})`)),
+    ]);
+
+    return [
+      ...cats
+        .filter((c) => c.gamesCount > 0)
+        .map((c) => ({
+          slug: c.slug,
+          title: c.title,
+          icon: c.icon ?? undefined,
+          gamesCount: c.gamesCount,
+          kind: "category" as const,
+        })),
+      ...loose
+        .filter((tp) => tp.gamesCount > 0)
+        .map((tp) => ({
+          slug: tp.slug,
+          title: tp.title,
+          icon: (tp.sourceConfig as { icon?: string })?.icon,
+          gamesCount: tp.gamesCount,
+          kind: "topic" as const,
+        })),
+    ];
   } catch {
     return [];
   }
@@ -314,24 +363,75 @@ export async function listCategories() {
 
 export const PAGE_SIZE = 10;
 
-/** Paginated published games of one category (rule: every DB list is paginated). */
-export async function listGamesByTopic(topicSlug: string, page = 1) {
+interface CatalogPage {
+  title: LocalizedText;
+  icon?: string;
+  page: number;
+  hasNext: boolean;
+  items: {
+    slug: string;
+    title: LocalizedText;
+    style: unknown;
+    config: GameConfig;
+    playsCount: number;
+  }[];
+}
+
+const gameCols = {
+  slug: games.slug,
+  title: games.title,
+  style: games.style,
+  config: games.config,
+  playsCount: games.playsCount,
+} as const;
+
+/**
+ * Catalog page for a slug that is EITHER a category (all its datasets' games)
+ * or an uncategorized dataset/topic. Every DB list is paginated.
+ */
+export async function loadCategoryPage(slug: string, page = 1): Promise<CatalogPage | null> {
+  const p = Math.max(1, page);
+
+  // 1) category slug → games across all its published datasets
+  const [cat] = await db
+    .select({ id: categories.id, title: categories.title, icon: categories.icon })
+    .from(categories)
+    .where(eq(categories.slug, slug))
+    .limit(1);
+  if (cat) {
+    const topicRows = await db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(and(eq(topics.categoryId, cat.id), eq(topics.status, "published")));
+    const ids = topicRows.map((r) => r.id);
+    const rows = ids.length
+      ? await db
+          .select(gameCols)
+          .from(games)
+          .where(and(inArray(games.topicId, ids), eq(games.status, "published")))
+          .orderBy(desc(games.playsCount), games.slug)
+          .limit(PAGE_SIZE + 1)
+          .offset((p - 1) * PAGE_SIZE)
+      : [];
+    return {
+      title: cat.title,
+      icon: cat.icon ?? undefined,
+      page: p,
+      hasNext: rows.length > PAGE_SIZE,
+      items: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, config: parseConfig(r.config) })),
+    };
+  }
+
+  // 2) fallback: an uncategorized dataset addressed by its own slug
   const [topic] = await db
     .select({ id: topics.id, title: topics.title, sourceConfig: topics.sourceConfig })
     .from(topics)
-    .where(and(eq(topics.slug, topicSlug), eq(topics.status, "published")))
+    .where(and(eq(topics.slug, slug), eq(topics.status, "published")))
     .limit(1);
   if (!topic) return null;
 
-  const p = Math.max(1, page);
   const rows = await db
-    .select({
-      slug: games.slug,
-      title: games.title,
-      style: games.style,
-      config: games.config,
-      playsCount: games.playsCount,
-    })
+    .select(gameCols)
     .from(games)
     .where(and(eq(games.topicId, topic.id), eq(games.status, "published")))
     .orderBy(desc(games.playsCount), games.slug)
@@ -339,7 +439,8 @@ export async function listGamesByTopic(topicSlug: string, page = 1) {
     .offset((p - 1) * PAGE_SIZE);
 
   return {
-    topic,
+    title: topic.title,
+    icon: (topic.sourceConfig as { icon?: string })?.icon,
     page: p,
     hasNext: rows.length > PAGE_SIZE,
     items: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, config: parseConfig(r.config) })),
