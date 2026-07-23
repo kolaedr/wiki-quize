@@ -15,6 +15,13 @@
       "when": 1784815227810,
       "tag": "0001_illegal_squadron_supreme",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784817302384,
+      "tag": "0002_daily_kitty_pryde",
+      "breakpoints": true
     }
   ]
 }

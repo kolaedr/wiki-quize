@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { useState, useTransition, type ReactNode } from "react";
+import { Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -57,18 +57,93 @@ export function CategorySelect({
   );
 }
 
-/** Create a browse category (top-level grouping of datasets). */
-export function NewCategoryForm() {
+/** Click-to-reveal panel — "Додати датасет/підкатегорію" opens a form. */
+export function TogglePanel({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <Button
+        size="sm"
+        variant={open ? "ghost" : "secondary"}
+        className="self-start"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? <X size={13} /> : <Plus size={13} />}
+        {label}
+      </Button>
+      {open && children}
+    </div>
+  );
+}
+
+/** Attach an EXISTING dataset to this category (a select of unassigned ones). */
+export function AttachDatasetSelect({
+  categoryId,
+  candidates,
+}: {
+  categoryId: string;
+  candidates: { slug: string; title: string }[];
+}) {
+  const [value, setValue] = useState("");
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  if (candidates.length === 0)
+    return <p className="text-xs text-muted">Немає вільних датасетів для прикріплення.</p>;
+
+  return (
+    <span className="flex items-center gap-2">
+      <select
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const slug = e.target.value;
+          setValue(slug);
+          if (!slug) return;
+          start(async () => {
+            const r = await setTopicCategoryAction(slug, categoryId);
+            setMsg(r.ok ? "прикріплено" : r.message);
+            setValue("");
+          });
+        }}
+        className="glass-card h-9 rounded-xl px-2 text-xs text-fg outline-none"
+      >
+        <option value="">+ прикріпити наявний датасет…</option>
+        {candidates.map((c) => (
+          <option key={c.slug} value={c.slug}>
+            {c.title}
+          </option>
+        ))}
+      </select>
+      {pending && <Loader2 size={13} className="animate-spin text-muted" />}
+      {msg && <span className="text-[11px] text-muted">{msg}</span>}
+    </span>
+  );
+}
+
+/**
+ * Create a browse category. `parents` lets a category be nested under another;
+ * `presetParentId` fixes the parent (used on a category detail page's
+ * "add sub-category").
+ */
+export function NewCategoryForm({
+  parents = [],
+  presetParentId,
+}: {
+  parents?: CategoryOption[];
+  presetParentId?: string;
+}) {
   const [slug, setSlug] = useState("");
   const [en, setEn] = useState("");
   const [uk, setUk] = useState("");
   const [icon, setIcon] = useState("deck");
+  const [parentId, setParentId] = useState(presetParentId ?? "");
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
 
   const submit = () =>
     start(async () => {
-      const r = await createCategoryAction(slug, en, uk, icon);
+      const r = await createCategoryAction(slug, en, uk, icon, presetParentId ?? parentId);
       setResult(r);
       if (r.ok) {
         setSlug("");
@@ -93,10 +168,24 @@ export function NewCategoryForm() {
           ))}
         </select>
       </div>
+      {!presetParentId && parents.length > 0 && (
+        <select
+          value={parentId}
+          onChange={(e) => setParentId(e.target.value)}
+          className="glass-card h-10 rounded-xl px-2 text-sm text-fg outline-none"
+        >
+          <option value="">— без батька (верхній рівень) —</option>
+          {parents.map((p) => (
+            <option key={p.id} value={p.id}>
+              вкласти в: {p.title}
+            </option>
+          ))}
+        </select>
+      )}
       <div className="flex items-center gap-3">
-        <Button size="sm" disabled={pending || !slug || !en} onClick={submit}>
+        <Button size="sm" disabled={pending || !en} onClick={submit}>
           {pending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-          Створити категорію
+          {presetParentId ? "Створити підкатегорію" : "Створити категорію"}
         </Button>
         {result && (
           <span className={`text-xs ${result.ok ? "text-success" : "text-danger"}`}>

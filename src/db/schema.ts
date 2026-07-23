@@ -11,6 +11,7 @@ import {
   uuid,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 
@@ -61,12 +62,19 @@ export const categories = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     slug: text("slug").notNull().unique(),
+    /** Nesting: a category may sit under a parent category. */
+    parentId: uuid("parent_id").references((): AnyPgColumn => categories.id, {
+      onDelete: "set null",
+    }),
     title: jsonb("title").$type<LocalizedText>().notNull(),
     icon: text("icon"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("categories_sort_idx").on(t.sortOrder)],
+  (t) => [
+    index("categories_sort_idx").on(t.sortOrder),
+    index("categories_parent_idx").on(t.parentId),
+  ],
 );
 
 /** A dataset of Wikidata entities + field mapping. Knows nothing about gameplay. */

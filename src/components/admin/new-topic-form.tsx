@@ -40,7 +40,7 @@ const countAt = (dist: { sitelinks: number; n: number }[], t: number) =>
  *    games are created UNLISTED — publishing is an explicit button in "Ігри".
  * Manual field rows remain as the advanced editor below.
  */
-export function NewTopicForm() {
+export function NewTopicForm({ categoryId }: { categoryId?: string } = {}) {
   const [slug, setSlug] = useState("");
   const [titleEn, setTitleEn] = useState("");
   const [titleUk, setTitleUk] = useState("");
@@ -126,7 +126,7 @@ export function NewTopicForm() {
         limit: 500,
         fields,
       };
-      setResult(await createTopicAction(def));
+      setResult(await createTopicAction(def, categoryId ?? ""));
     });
 
   const setField = (i: number, patch: Partial<TopicFieldDef>) =>

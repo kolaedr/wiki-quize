@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { asc, sql } from "drizzle-orm";
-import { Database, FolderTree, Rows3 } from "lucide-react";
+import { Database, Rows3 } from "lucide-react";
 import { db } from "@/db";
 import { categories, topicEntities, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
 import { importPresetAction, resetContentAction } from "@/lib/admin/actions";
 import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
-import { CategorySelect, NewCategoryForm } from "@/components/admin/category-controls";
+import { CategorySelect } from "@/components/admin/category-controls";
 import { NewTopicForm } from "@/components/admin/new-topic-form";
 import { Button } from "@/components/ui/button";
 
@@ -47,22 +47,10 @@ export default async function AdminTopicsPage() {
         />
       </div>
 
-      {/* categories: top-level grouping of datasets */}
-      <section className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
-          <FolderTree size={14} /> Категорії (групують датасети в каталозі)
-        </h2>
-        {categoryOptions.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.map((c) => (
-              <span key={c.id} className="rounded-full bg-accent-soft px-3 py-1 text-xs text-accent">
-                {c.title}
-              </span>
-            ))}
-          </div>
-        )}
-        <NewCategoryForm />
-      </section>
+      <p className="text-xs text-muted">
+        Категорії — в окремому розділі. Тут признач датасету категорію у випадайці
+        поруч, або створюй/додавай датасети зсередини категорії.
+      </p>
 
       <section className="flex flex-col gap-3">
         {[

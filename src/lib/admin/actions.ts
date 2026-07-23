@@ -162,7 +162,10 @@ export async function probeClassAction(classQidsRaw: string): Promise<ProbeResul
 }
 
 /** NO-CODE builder: save a topic definition and run its first import. */
-export async function createTopicAction(def: TopicDef): Promise<ActionResult> {
+export async function createTopicAction(
+  def: TopicDef,
+  categoryId = "",
+): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   try {
     validateDef(def);
@@ -178,10 +181,15 @@ export async function createTopicAction(def: TopicDef): Promise<ActionResult> {
         sourceConfig: { def, icon: def.icon },
         fieldSchema: def.fields.map((f) => ({ role: f.role, kind: f.kind, wikidataProp: f.prop })),
         status: "syncing",
+        ...(categoryId ? { categoryId } : {}),
       })
       .onConflictDoUpdate({
         target: topics.slug,
-        set: { sourceConfig: { def, icon: def.icon }, title: def.title },
+        set: {
+          sourceConfig: { def, icon: def.icon },
+          title: def.title,
+          ...(categoryId ? { categoryId } : {}),
+        },
       });
     const report = await runImport(def.slug);
     revalidatePath("/admin");
@@ -197,12 +205,13 @@ export async function createTopicAction(def: TopicDef): Promise<ActionResult> {
   }
 }
 
-/** Create a browse category (top-level grouping of datasets). */
+/** Create a browse category (top-level grouping of datasets), optionally nested. */
 export async function createCategoryAction(
   slug: string,
   titleEn: string,
   titleUk: string,
   icon: string,
+  parentId = "",
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   if (!titleEn.trim()) return { ok: false, message: "Назва (EN) обовʼязкова" };
@@ -214,20 +223,14 @@ export async function createCategoryAction(
     .slice(0, 40);
   if (!/^[a-z0-9-]{2,40}$/.test(s))
     return { ok: false, message: "Назва має містити латинські літери/цифри для slug" };
+  const title = { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) };
   try {
     await db
       .insert(categories)
-      .values({
-        slug: s,
-        title: { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) },
-        icon: icon || null,
-      })
+      .values({ slug: s, title, icon: icon || null, parentId: parentId || null })
       .onConflictDoUpdate({
         target: categories.slug,
-        set: {
-          title: { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) },
-          icon: icon || null,
-        },
+        set: { title, icon: icon || null, parentId: parentId || null },
       });
     revalidatePath("/admin");
     revalidatePath("/");
