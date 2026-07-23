@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ActionResult } from "@/lib/admin/actions";
 
-type IconType = React.ComponentType<{ size?: number }>;
+// server components can't pass a component across the boundary — map by name
+const ICONS = { trash: Trash2, sync: RefreshCw, import: Upload } as const;
+type IconName = keyof typeof ICONS;
 
 interface Props {
   label: string;
@@ -13,8 +15,8 @@ interface Props {
   variant?: "default" | "secondary" | "ghost" | "destructive";
   /** destructive: require a second click before firing */
   confirm?: boolean;
-  /** optional leading icon (lucide component) */
-  icon?: IconType;
+  /** optional leading icon, referenced by name */
+  icon?: IconName;
   /** render just the icon (compact); `label` becomes the tooltip */
   iconOnly?: boolean;
 }
@@ -25,9 +27,10 @@ export function ActionButton({
   action,
   variant = "default",
   confirm = false,
-  icon: Icon,
+  icon,
   iconOnly = false,
 }: Props) {
+  const Icon = icon ? ICONS[icon] : null;
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [armed, setArmed] = useState(false);

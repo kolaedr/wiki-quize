@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { asc, sql } from "drizzle-orm";
-import { Database, Rows3, Trash2 } from "lucide-react";
+import { Database, Rows3 } from "lucide-react";
 import { db } from "@/db";
 import { categories, topicEntities, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
@@ -42,7 +42,7 @@ export default async function AdminTopicsPage() {
         <ActionButton
           variant="ghost"
           confirm
-          icon={Trash2}
+          icon="trash"
           label="Очистити датасети й ігри"
           action={resetContentAction}
         />
@@ -110,7 +110,7 @@ export default async function AdminTopicsPage() {
                       variant="ghost"
                       confirm
                       iconOnly
-                      icon={Trash2}
+                      icon="trash"
                       label="Видалити датасет"
                       action={deleteTopicAction.bind(null, slug)}
                     />
