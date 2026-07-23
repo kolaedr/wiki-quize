@@ -12,10 +12,10 @@ import {
 } from "@/lib/ingest/def";
 import {
   countForClass,
-  sampleWithFields,
+  discoverFields,
   searchClasses,
   type ClassCandidate,
-  type ProbeSample,
+  type ProbeField,
 } from "@/lib/ingest/probe";
 import { MIN_PUBLISHABLE_ITEMS, STARTER_GAMES, runImport } from "@/lib/ingest/run";
 import { getJob, importTick, startDefImportJob, type JobView } from "@/lib/ingest/job";
@@ -222,17 +222,19 @@ export interface ProbeResult {
   message?: string;
   /** how many items exist at the threshold (single COUNT) */
   total?: number;
-  /** ONE representative entity + its filled fields (root = English) */
-  sample?: ProbeSample | null;
+  /** how many top items the fields were sampled from */
+  sampleSize?: number;
+  /** filled fields across the sampled items (coverage + previews) */
+  fields?: ProbeField[];
 }
 
 const parseQids = (raw: string) =>
   raw.split(",").map((s) => s.trim()).filter(Boolean);
 
 /**
- * LIGHT probe — the whole point of reconnaissance: how many items there will be
- * (one COUNT) and ONE representative entity with its fields (root = English).
- * Two fast queries; the heavy full pull happens later in setupTopicAction.
+ * LIGHT probe: how many items there will be (one COUNT) + which fields are
+ * filled across the TOP ~12 items (root = English). Fast; the heavy pull runs
+ * later as a batched job.
  */
 export async function probeClassAction(
   classQidsRaw: string,
@@ -242,19 +244,20 @@ export async function probeClassAction(
   const classQids = parseQids(classQidsRaw);
   if (classQids.length === 0 || classQids.some((q) => !/^Q\d+$/.test(q)))
     return { ok: false, message: "Класи мають бути виду Q3231690 (через кому)" };
-  const [countRes, sampleRes] = await Promise.allSettled([
+  const [countRes, fieldsRes] = await Promise.allSettled([
     countForClass(classQids, threshold),
-    sampleWithFields(classQids),
+    discoverFields(classQids),
   ]);
   const total = countRes.status === "fulfilled" ? countRes.value : undefined;
-  const sample = sampleRes.status === "fulfilled" ? sampleRes.value : null;
-  if (total == null && !sample)
+  const disc = fieldsRes.status === "fulfilled" ? fieldsRes.value : null;
+  if (total == null && !disc)
     return { ok: false, message: "Клас недоступний або завеликий — спробуй вужчий клас." };
   return {
     ok: true,
     total,
-    sample,
-    message: sample ? undefined : "Приклад не завантажився — спробуй ще раз.",
+    sampleSize: disc?.sampleSize,
+    fields: disc?.fields ?? [],
+    message: disc ? undefined : "Поля не завантажились — спробуй ще раз.",
   };
 }
 
@@ -386,7 +389,7 @@ export async function startImportJobAction(topicSlug: string): Promise<StartJobR
 /** Run ONE batch of an import job. The client calls this N times on demand. */
 export async function importTickAction(jobId: string): Promise<JobView> {
   if (!(await getAdminSession()))
-    return { jobId, status: "failed", phase: "done", bandIndex: 0, bands: [], accepted: 0, done: true, message: "forbidden" };
+    return { jobId, status: "failed", phase: "done", batchIndex: 0, totalBatches: 0, batchSizes: [], accepted: 0, done: true, message: "forbidden" };
   const p = await importTick(jobId);
   if (p.done) {
     revalidatePath("/admin");

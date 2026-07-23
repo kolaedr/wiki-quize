@@ -3,40 +3,42 @@ import { db } from "@/db";
 import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { ACTIVE_LOCALES } from "@/i18n/locales";
 import { filterWorkingUrls } from "@/lib/validate-urls";
-import { sparqlQuery } from "@/lib/wikidata/sparql";
-import { autoGamesFor, buildTopicQuery, normalizeDefRow, type TopicDef } from "./def";
+import { qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
+import {
+  autoGamesFor,
+  buildEntityQuery,
+  buildQidListQuery,
+  normalizeDefRow,
+  type TopicDef,
+} from "./def";
 import type { RawEntity } from "./presets";
 import { enrichRefs } from "./run";
 
 /**
- * BATCHED IMPORT JOB. The heavy pull is split into short units so the browser
- * can drive it tick-by-tick (a progress bar) instead of one request hanging for
- * minutes. Each fetch tick = ONE sitelinks band, upserted incrementally; a
- * final tick ranks difficulty, drops stale rows and creates the games.
+ * BATCHED IMPORT JOB. The item list is fetched once (famous → obscure), split
+ * into batches of ~BATCH_SIZE items, and each batch is a short request the
+ * browser runs on demand (a checklist it can step through). A final tick ranks
+ * difficulty, drops stale rows and creates the games.
  */
 
-interface Band {
-  min: number;
-  max?: number;
-}
+const BATCH_SIZE = 25;
+const MIN_PUBLISHABLE = 8;
+
 interface Cursor {
   phase: "fetch" | "finalize" | "done";
-  bands: Band[];
-  bandIndex: number;
+  batches: string[][]; // QIDs per batch
+  batchIndex: number;
   runStartMs: number;
   accepted: number;
 }
-
-const BAND_STOPS = [2000, 800, 300, 150, 80, 50, 35, 25, 18, 12];
-const MIN_PUBLISHABLE = 8;
 
 export interface JobView {
   jobId: string;
   status: string;
   phase: string;
-  /** how many bands are already processed */
-  bandIndex: number;
-  bands: Band[];
+  batchIndex: number;
+  totalBatches: number;
+  batchSizes: number[];
   accepted: number;
   done: boolean;
   message?: string;
@@ -46,21 +48,21 @@ const toView = (jobId: string, status: string, c: Cursor, message?: string): Job
   jobId,
   status,
   phase: c.phase,
-  bandIndex: c.bandIndex,
-  bands: c.bands,
+  batchIndex: c.batchIndex,
+  totalBatches: c.batches.length,
+  batchSizes: c.batches.map((b) => b.length),
   accepted: c.accepted,
   done: status === "done" || status === "failed",
   message,
 });
 
-/** Read a job's current state without doing work (for rendering the table). */
 export async function getJob(jobId: string): Promise<JobView | null> {
   const [job] = await db.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
   if (!job) return null;
   return toView(jobId, job.status, job.cursor as unknown as Cursor);
 }
 
-/** Create a running import job for a def-topic; returns its id. */
+/** Create a job: fetch the item list once, chunk into item-count batches. */
 export async function startDefImportJob(
   topicSlug: string,
 ): Promise<{ jobId: string } | { error: string }> {
@@ -69,22 +71,24 @@ export async function startDefImportJob(
   const def = (topic.sourceConfig as { def?: TopicDef } | null)?.def;
   if (!def) return { error: "датасет без конфігурації — спочатку налаштуй" };
 
-  const stops = BAND_STOPS.filter((t) => t > def.sitelinksMin)
-    .concat(def.sitelinksMin)
-    .sort((a, b) => b - a);
-  const bands: Band[] = [];
-  let ceil: number | undefined;
-  for (const floor of stops) {
-    bands.push({ min: floor, max: ceil });
-    ceil = floor;
+  let qids: string[];
+  try {
+    const rows = await sparqlQuery(buildQidListQuery(def, def.sitelinksMin));
+    qids = rows.map((r) => qidFromUri(r.item?.value ?? "")).filter((q) => /^Q\d+$/.test(q));
+  } catch (err) {
+    return { error: `не вдалося отримати список айтемів: ${String(err).slice(0, 120)}` };
   }
+  if (qids.length === 0) return { error: "за цим порогом нема айтемів — знизь поріг" };
+
+  const batches: string[][] = [];
+  for (let i = 0; i < qids.length; i += BATCH_SIZE) batches.push(qids.slice(i, i + BATCH_SIZE));
 
   await db
     .update(importJobs)
     .set({ status: "failed", finishedAt: new Date(), log: ["superseded by a new run"] })
     .where(and(eq(importJobs.topicId, topic.id), eq(importJobs.status, "running")));
 
-  const cursor: Cursor = { phase: "fetch", bands, bandIndex: 0, runStartMs: Date.now(), accepted: 0 };
+  const cursor: Cursor = { phase: "fetch", batches, batchIndex: 0, runStartMs: Date.now(), accepted: 0 };
   const [job] = await db
     .insert(importJobs)
     .values({ topicId: topic.id, status: "running", startedAt: new Date(), cursor })
@@ -92,11 +96,11 @@ export async function startDefImportJob(
   return { jobId: job.id };
 }
 
-/** Do ONE unit of work for the job and report the new state. */
+/** Do ONE batch (or the finalize step) and report the new state. */
 export async function importTick(jobId: string): Promise<JobView> {
   const [job] = await db.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
   if (!job)
-    return { jobId, status: "failed", phase: "done", bandIndex: 0, bands: [], accepted: 0, done: true, message: "джоб не знайдено" };
+    return { jobId, status: "failed", phase: "done", batchIndex: 0, totalBatches: 0, batchSizes: [], accepted: 0, done: true, message: "джоб не знайдено" };
   const cursor = job.cursor as unknown as Cursor;
 
   if (job.status === "done" || cursor.phase === "done") return toView(jobId, "done", cursor);
@@ -121,81 +125,74 @@ export async function importTick(jobId: string): Promise<JobView> {
 
   try {
     if (cursor.phase === "fetch") {
-      const band = cursor.bands[cursor.bandIndex];
-      let bandAccepted = 0;
-      try {
-        const rows = await sparqlQuery(
-          buildTopicQuery(def, locales, { min: band.min, maxExclusive: band.max }),
-        );
-        const seen = new Set<string>();
-        const entities: RawEntity[] = [];
-        for (const row of rows) {
-          const e = normalizeDefRow(def, row, locales);
-          if (!e || seen.has(e.qid)) continue;
-          seen.add(e.qid);
-          if (!e.labels[rootLocale]) continue;
-          if (missingRequired(e)) continue;
-          entities.push(e);
-        }
-        await enrichRefs(entities, refRoles, locales);
-
-        const urls = entities.flatMap((e) => imageRoles.map((r) => e.values[r] as string | undefined));
-        const defined = urls.filter(Boolean).length;
-        const okUrls = await filterWorkingUrls(urls, 5);
-        const degraded = defined > 0 && okUrls.size / defined < 0.5;
-        if (!degraded)
-          for (const e of entities)
-            for (const r of imageRoles) {
-              const u = e.values[r] as string | undefined;
-              if (u && !okUrls.has(u)) {
-                e.values[r] = undefined;
-                if (e.imageUrl === u) e.imageUrl = undefined;
-              }
-            }
-        const valid = entities.filter((e) => !missingRequired(e));
-
-        const CHUNK = 100;
-        for (let i = 0; i < valid.length; i += CHUNK) {
-          await db
-            .insert(topicEntities)
-            .values(
-              valid.slice(i, i + CHUNK).map((e) => ({
-                topicId: topic.id,
-                wikidataQid: e.qid,
-                labels: e.labels,
-                values: e.values,
-                imageUrl: e.imageUrl,
-                wikiLinks: e.wikiLinks,
-                sitelinks: e.sitelinks,
-                difficultyScore: 0,
-              })),
-            )
-            .onConflictDoUpdate({
-              target: [topicEntities.topicId, topicEntities.wikidataQid],
-              set: {
-                labels: sql`excluded.labels`,
-                values: sql`excluded.values`,
-                imageUrl: sql`excluded.image_url`,
-                wikiLinks: sql`excluded.wiki_links`,
-                sitelinks: sql`excluded.sitelinks`,
-                updatedAt: sql`now()`,
-              },
-            });
-        }
-        bandAccepted = valid.length;
-      } catch (err) {
-        if (!String(err).includes("504")) throw err; // a timed-out band is skipped
+      const qids = cursor.batches[cursor.batchIndex];
+      let batchAccepted = 0;
+      const rows = await sparqlQuery(buildEntityQuery(def, locales, qids));
+      const seen = new Set<string>();
+      const entities: RawEntity[] = [];
+      for (const row of rows) {
+        const e = normalizeDefRow(def, row, locales);
+        if (!e || seen.has(e.qid)) continue;
+        seen.add(e.qid);
+        if (!e.labels[rootLocale]) continue;
+        if (missingRequired(e)) continue;
+        entities.push(e);
       }
+      await enrichRefs(entities, refRoles, locales);
 
-      const bandIndex = cursor.bandIndex + 1;
+      const urls = entities.flatMap((e) => imageRoles.map((r) => e.values[r] as string | undefined));
+      const defined = urls.filter(Boolean).length;
+      const okUrls = await filterWorkingUrls(urls, 5);
+      const degraded = defined > 0 && okUrls.size / defined < 0.5;
+      if (!degraded)
+        for (const e of entities)
+          for (const r of imageRoles) {
+            const u = e.values[r] as string | undefined;
+            if (u && !okUrls.has(u)) {
+              e.values[r] = undefined;
+              if (e.imageUrl === u) e.imageUrl = undefined;
+            }
+          }
+      const valid = entities.filter((e) => !missingRequired(e));
+
+      if (valid.length) {
+        await db
+          .insert(topicEntities)
+          .values(
+            valid.map((e) => ({
+              topicId: topic.id,
+              wikidataQid: e.qid,
+              labels: e.labels,
+              values: e.values,
+              imageUrl: e.imageUrl,
+              wikiLinks: e.wikiLinks,
+              sitelinks: e.sitelinks,
+              difficultyScore: 0,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [topicEntities.topicId, topicEntities.wikidataQid],
+            set: {
+              labels: sql`excluded.labels`,
+              values: sql`excluded.values`,
+              imageUrl: sql`excluded.image_url`,
+              wikiLinks: sql`excluded.wiki_links`,
+              sitelinks: sql`excluded.sitelinks`,
+              updatedAt: sql`now()`,
+            },
+          });
+      }
+      batchAccepted = valid.length;
+
+      const batchIndex = cursor.batchIndex + 1;
       const next: Cursor = {
         ...cursor,
-        bandIndex,
-        accepted: cursor.accepted + bandAccepted,
-        phase: bandIndex >= cursor.bands.length ? "finalize" : "fetch",
+        batchIndex,
+        accepted: cursor.accepted + batchAccepted,
+        phase: batchIndex >= cursor.batches.length ? "finalize" : "fetch",
       };
       await db.update(importJobs).set({ cursor: next as unknown as object }).where(eq(importJobs.id, jobId));
-      return toView(jobId, "running", next, `батч ${bandIndex}/${cursor.bands.length} · ${next.accepted} айтемів`);
+      return toView(jobId, "running", next, `батч ${batchIndex}/${cursor.batches.length} · ${next.accepted} айтемів`);
     }
 
     // finalize

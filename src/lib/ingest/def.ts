@@ -63,14 +63,7 @@ export function validateDef(def: TopicDef) {
  * import can fetch big classes in BATCHES that each stay under the public
  * endpoint's ~60s timeout (see fetchDefRows in run.ts).
  */
-export function buildTopicQuery(
-  def: TopicDef,
-  locales: readonly string[],
-  range?: { min: number; maxExclusive?: number },
-): string {
-  const min = range?.min ?? def.sitelinksMin;
-  const maxClause =
-    range?.maxExclusive != null ? `FILTER(?sitelinks < ${range.maxExclusive})` : "";
+function queryShape(def: TopicDef, locales: readonly string[]) {
   // locales[0] = ROOT (required); the rest are OPTIONAL (best-effort per-locale
   // fill), so adding a language never shrinks the dataset.
   const labelClauses = locales
@@ -82,15 +75,7 @@ export function buildTopicQuery(
     .join("\n  ");
   const labelVars = locales.map((l) => `?label_${l} ?article_${l}`).join(" ");
 
-  const classUnion = def.classQids
-    .map((q) => `{ ?item wdt:P31/wdt:P279* wd:${q} . }`)
-    .join("\n  UNION\n  ");
-  const excludes = (def.excludeClassQids ?? [])
-    .map((q) => `MINUS { ?item wdt:P31 wd:${q} . }`)
-    .join("\n  ");
-
   const propPath = (prop: string) => prop.split("|").map((p) => `wdt:${p}`).join("|");
-
   const fieldClauses = def.fields
     .map((f) =>
       f.kind === "entityRefList"
@@ -98,21 +83,36 @@ export function buildTopicQuery(
         : `OPTIONAL { ?item ${propPath(f.prop)} ?v_${f.role} . }`,
     )
     .join("\n  ");
-
-  const scalarVars = def.fields
-    .filter((f) => f.kind !== "entityRefList")
-    .map((f) => `?v_${f.role}`);
+  const scalarVars = def.fields.filter((f) => f.kind !== "entityRefList").map((f) => `?v_${f.role}`);
   const refVars = def.fields
     .filter((f) => f.kind === "entityRefList")
     .map(
       (f) =>
         `(GROUP_CONCAT(DISTINCT STRAFTER(STR(?ref_${f.role}), "entity/"); separator="|") AS ?refs_${f.role})`,
     );
-
   const groupBy = ["?item", "?sitelinks", labelVars, ...scalarVars].join(" ");
+  const select = `SELECT ?item ?sitelinks ${labelVars} ${scalarVars.join(" ")} ${refVars.join(" ")}`;
+  return { labelClauses, fieldClauses, groupBy, select };
+}
+
+export function buildTopicQuery(
+  def: TopicDef,
+  locales: readonly string[],
+  range?: { min: number; maxExclusive?: number },
+): string {
+  const min = range?.min ?? def.sitelinksMin;
+  const maxClause =
+    range?.maxExclusive != null ? `FILTER(?sitelinks < ${range.maxExclusive})` : "";
+  const classUnion = def.classQids
+    .map((q) => `{ ?item wdt:P31/wdt:P279* wd:${q} . }`)
+    .join("\n  UNION\n  ");
+  const excludes = (def.excludeClassQids ?? [])
+    .map((q) => `MINUS { ?item wdt:P31 wd:${q} . }`)
+    .join("\n  ");
+  const { labelClauses, fieldClauses, groupBy, select } = queryShape(def, locales);
 
   return `
-SELECT ?item ?sitelinks ${labelVars} ${scalarVars.join(" ")} ${refVars.join(" ")}
+${select}
 WHERE {
   ${classUnion}
   ${excludes}
@@ -125,6 +125,44 @@ WHERE {
 GROUP BY ${groupBy}
 LIMIT ${Math.min(def.limit || 500, 5000)}
 `;
+}
+
+/** Fetch the class's item QIDs (famous first) — the list is then chunked into
+ *  item-count batches for the import job. */
+export function buildQidListQuery(def: TopicDef, sitelinksMin: number): string {
+  const classUnion = def.classQids
+    .map((q) => `{ ?item wdt:P31/wdt:P279* wd:${q} . }`)
+    .join("\n  UNION\n  ");
+  return `
+SELECT ?item ?sitelinks WHERE {
+  ${classUnion}
+  ?item wikibase:sitelinks ?sitelinks .
+  FILTER(?sitelinks >= ${Math.max(0, Math.floor(sitelinksMin))})
+}
+ORDER BY DESC(?sitelinks)
+LIMIT ${Math.min(def.limit || 5000, 8000)}`;
+}
+
+/** Fetch full field data for a SPECIFIC set of items (one import batch). */
+export function buildEntityQuery(
+  def: TopicDef,
+  locales: readonly string[],
+  qids: string[],
+): string {
+  const values = qids
+    .filter((q) => /^Q\d+$/.test(q))
+    .map((q) => `wd:${q}`)
+    .join(" ");
+  const { labelClauses, fieldClauses, groupBy, select } = queryShape(def, locales);
+  return `
+${select}
+WHERE {
+  VALUES ?item { ${values} }
+  ?item wikibase:sitelinks ?sitelinks .
+  ${labelClauses}
+  ${fieldClauses}
+}
+GROUP BY ${groupBy}`;
 }
 
 /** Normalize one SPARQL row according to the definition. */

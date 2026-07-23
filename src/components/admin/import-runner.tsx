@@ -70,15 +70,16 @@ export function ImportRunner({
       </div>
     );
 
-  const totalBands = view.bands.length;
-  const remaining = totalBands - view.bandIndex + (view.phase === "done" ? 0 : 1); // + finalize
-  const pct = Math.round((view.bandIndex / (totalBands + 1)) * 100);
+  const totalBatches = view.totalBatches;
+  const remaining = totalBatches - view.batchIndex + (view.phase === "done" ? 0 : 1); // + finalize
+  const pct = Math.round((view.batchIndex / (totalBatches + 1)) * 100);
+  let pos = 0; // running item position for labels
 
   return (
     <div className="glass-card flex w-full max-w-md flex-col gap-2 p-3">
       <div className="flex items-center justify-between text-xs">
         <span className="font-semibold text-fg">
-          Джоб імпорту · {view.accepted} айтемів
+          Черга імпорту · {totalBatches} батчів · {view.accepted} айтемів
         </span>
         <span
           className={
@@ -101,11 +102,13 @@ export function ImportRunner({
         />
       </div>
 
-      {/* batch table */}
+      {/* batch table (by item count) */}
       <div className="max-h-48 overflow-y-auto rounded-lg border border-line/60 text-xs">
-        {view.bands.map((b, i) => {
-          const done = i < view.bandIndex;
-          const current = i === view.bandIndex && view.phase === "fetch";
+        {view.batchSizes.map((size, i) => {
+          const from = pos + 1;
+          pos += size;
+          const done = i < view.batchIndex;
+          const current = i === view.batchIndex && view.phase === "fetch";
           return (
             <div key={i} className="flex items-center gap-2 border-t border-line/40 p-1.5 first:border-t-0">
               {done ? (
@@ -116,7 +119,7 @@ export function ImportRunner({
                 <Circle size={10} className={current ? "text-accent" : "text-muted"} />
               )}
               <span className={done ? "text-muted line-through" : current ? "text-fg" : "text-muted"}>
-                Батч {i + 1}: популярність {b.max ? `${b.min}–${b.max}` : `${b.min}+`}
+                Батч {i + 1}: {size} айтемів (№{from}–{pos})
               </span>
             </div>
           );

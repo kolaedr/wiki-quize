@@ -8,6 +8,7 @@ import { ActionButton } from "@/components/admin/action-button";
 import { DatasetSetup } from "@/components/admin/dataset-setup";
 import { GameComposer } from "@/components/admin/game-composer";
 import { ImportRunner } from "@/components/admin/import-runner";
+import { ItemPreview } from "@/components/admin/item-preview";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
@@ -126,6 +127,16 @@ export default async function AdminTopicPage({
               </span>
             </span>
             {e.excluded && <Badge variant="danger">вимкнено</Badge>}
+            <ItemPreview
+              entity={{
+                qid: e.wikidataQid,
+                label,
+                imageUrl: e.imageUrl,
+                values: e.values as Record<string, unknown>,
+                wikiLinks: e.wikiLinks as Record<string, string> | null,
+              }}
+              fields={(topic.fieldSchema as { role: string; kind: string }[]) ?? []}
+            />
             <ActionButton
               variant="ghost"
               label={e.excluded ? "Увімкнути" : "Вимкнути"}

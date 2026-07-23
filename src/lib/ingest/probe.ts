@@ -127,18 +127,12 @@ export interface ProbeField {
   prop: string;
   label: string;
   kind: TopicFieldDef["kind"] | null;
-  /** one example value (label) from the sample entity */
+  /** share of sampled items that carry this field (0..1) */
+  coverage: number;
+  /** one example value (for number/date) */
   example?: string;
   /** for image fields: a thumbnail URL to render inline */
   exampleImage?: string;
-}
-
-export interface ProbeSample {
-  qid: string;
-  label: string;
-  /** global wiki article count — a popularity proxy, NOT what we store */
-  popularity: number;
-  fields: ProbeField[];
 }
 
 const TYPE_TO_KIND: Record<string, TopicFieldDef["kind"]> = {
@@ -193,52 +187,59 @@ LIMIT 120`;
   return { sampleSize: n, properties };
 }
 
-/**
- * THE probe: ONE representative (top) entity with its filled properties and
- * example values. Root language = English. Two light queries — instant, so the
- * request never hangs. The admin sees the fields, ticks what to pull, and only
- * THEN runs the heavy batch import.
- */
-export async function sampleWithFields(classQids: string[]): Promise<ProbeSample | null> {
-  const top = await sparqlQuery(`
-SELECT ?item ?itemLabel ?sl WHERE {
-  { SELECT ?item ?sl WHERE { ${classUnion(classQids)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT 1 }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-}`);
-  const qid = qidFromUri(top[0]?.item?.value ?? "");
-  if (!QID_RE.test(qid)) return null;
+export interface DiscoveredFields {
+  sampleSize: number;
+  fields: ProbeField[];
+}
 
-  // NB: the label service names the output ?<var>Label — so the property var
-  // MUST be ?prop for ?propLabel to bind (a previous ?p gave ?pLabel → blank).
+/**
+ * THE probe fields: which properties are filled across the TOP ~12 items (not
+ * just one — so a field most items have but the very top lacks, e.g. coat of
+ * arms when the #1 country uses a seal, still shows up). One light query. Image
+ * fields carry a thumbnail so flag vs coat of arms is visible at a glance.
+ */
+export async function discoverFields(classQids: string[]): Promise<DiscoveredFields> {
+  const SAMPLE = 12;
+  // NB: the label service names its output ?<var>Label — the property var MUST
+  // be ?prop so ?propLabel binds (a ?p would give ?pLabel → blank).
   const rows = await sparqlQuery(`
-SELECT ?prop ?propLabel ?ptype ?v ?vLabel WHERE {
-  wd:${qid} ?pd ?v .
+SELECT ?prop ?propLabel ?ptype (COUNT(DISTINCT ?item) AS ?cnt) (SAMPLE(?v) AS ?ex) WHERE {
+  {
+    SELECT ?item WHERE {
+      ${classUnion(classQids)}
+      ?item wikibase:sitelinks ?sl .
+      FILTER(?sl >= 10)
+    }
+    ORDER BY DESC(?sl)
+    LIMIT ${SAMPLE}
+  }
+  ?item ?pd ?v .
   ?prop wikibase:directClaim ?pd ; wikibase:propertyType ?ptype .
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} LIMIT 500`);
-  const byProp = new Map<string, ProbeField>();
+}
+GROUP BY ?prop ?propLabel ?ptype
+ORDER BY DESC(?cnt)
+LIMIT 150`);
+
+  const fields: ProbeField[] = [];
   for (const r of rows) {
     const prop = qidFromUri(r.prop?.value ?? "");
-    if (!/^P\d+$/.test(prop) || byProp.has(prop)) continue;
+    if (!/^P\d+$/.test(prop)) continue;
     const kind = TYPE_TO_KIND[r.ptype?.value ?? ""] ?? null;
-    byProp.set(prop, {
+    const ex = r.ex?.value;
+    fields.push({
       prop,
       label: r.propLabel?.value ?? prop,
       kind,
-      example: r.vLabel?.value,
-      exampleImage: kind === "image" && r.v?.value ? commonsThumb(r.v.value, 96) : undefined,
+      coverage: Math.min(1, Number(r.cnt?.value ?? 0) / SAMPLE),
+      exampleImage: kind === "image" && ex ? commonsThumb(ex, 96) : undefined,
+      example: kind === "number" || kind === "date" ? ex : undefined,
     });
   }
-  // order: images first, then dates, numbers, refs, unsupported last
   const rank = (k: TopicFieldDef["kind"] | null) =>
     k === "image" ? 0 : k === "date" ? 1 : k === "number" ? 2 : k === "entityRefList" ? 3 : 9;
-  const fields = [...byProp.values()].sort((a, b) => rank(a.kind) - rank(b.kind));
-  return {
-    qid,
-    label: top[0]?.itemLabel?.value ?? qid,
-    popularity: Number(top[0]?.sl?.value ?? 0),
-    fields,
-  };
+  fields.sort((a, b) => rank(a.kind) - rank(b.kind) || b.coverage - a.coverage);
+  return { sampleSize: SAMPLE, fields };
 }
 
 export interface SampleEntity {

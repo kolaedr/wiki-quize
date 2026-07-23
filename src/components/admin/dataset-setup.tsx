@@ -96,9 +96,9 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
       const r = await probeClassAction(classCsv, threshold);
       setProbe(r);
       setTotal(r.total ?? null);
-      if (r.ok && r.sample) {
+      if (r.ok && r.fields) {
         // default: only image fields (name is always pulled); rest is admin's choice
-        setPicked(new Set(r.sample.fields.filter((f) => f.kind === "image").map((f) => f.prop)));
+        setPicked(new Set(r.fields.filter((f) => f.kind === "image").map((f) => f.prop)));
       }
     });
 
@@ -132,13 +132,13 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
 
   const submit = () =>
     start(async () => {
-      const fields = fieldsFrom((probe?.sample?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind));
+      const fields = fieldsFrom((probe?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind));
       const r = await setupTopicAction(topicSlug, classQids, threshold, fields, ["en", ...locales]);
       setResult(r);
       if (r.ok) setSaved(true); // switches to the batched import runner below
     });
 
-  const sample = probe?.ok ? probe.sample : null;
+  const fields = probe?.ok ? (probe.fields ?? []) : null;
 
   return (
     <div className="glass-card flex flex-col gap-3 p-4">
@@ -230,15 +230,11 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
       {probe && !probe.ok && <p className="text-xs text-danger">{probe.message}</p>}
       {probe?.ok && probe.message && <p className="text-xs text-amber-500">{probe.message}</p>}
 
-      {sample && (
+      {fields && (
         <>
-          {/* sample entity + total */}
+          {/* total + threshold */}
           <div className="rounded-xl bg-accent-soft/40 p-3 text-xs">
-            <p className="font-semibold text-fg">
-              Приклад: {sample.label}{" "}
-              <span className="font-normal text-muted">({sample.qid})</span>
-            </p>
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted">
               <span>
                 Скільки буде: <span className="font-semibold text-fg">{total ?? "—"}</span> айтемів при
                 порозі
@@ -254,17 +250,17 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
               </Button>
             </p>
             <p className="mt-0.5 text-[11px] text-muted">
-              поріг = скільки вікі-статей має айтем (проксі відомості; популярність прикладу:{" "}
-              {sample.popularity})
+              поріг = скільки вікі-статей має айтем (проксі відомості)
             </p>
           </div>
 
-          {/* fields = checkboxes from the sample entity */}
+          {/* fields = checkboxes discovered across the top items */}
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-fg">Які поля тягнути?</span>
             <p className="text-[11px] text-muted">
               Назва тягнеться завжди. Зображення позначені за замовчуванням; решту
-              обирай за потреби. Приклад — реальне значення з «{sample.label}».
+              обирай за потреби. «Заповнено» = у скількох із топ-{probe?.sampleSize ?? 12}
+              айтемів є це поле.
             </p>
             <div className="max-h-72 overflow-y-auto rounded-lg border border-line/60">
               <table className="w-full text-left text-xs">
@@ -273,11 +269,12 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
                     <th className="p-2"> </th>
                     <th className="p-2">Поле</th>
                     <th className="p-2">Тип</th>
+                    <th className="p-2">Заповнено</th>
                     <th className="p-2">Приклад</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sample.fields.map((p) => (
+                  {fields.map((p) => (
                     <tr
                       key={p.prop}
                       onClick={() => p.kind && togglePick(p.prop, !picked.has(p.prop))}
@@ -291,6 +288,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
                         <span className="text-[10px] text-muted">{p.prop}</span>
                       </td>
                       <td className="p-2 align-top">{p.kind ? KIND_UK[p.kind] : "—"}</td>
+                      <td className="p-2 align-top text-muted">{Math.round(p.coverage * 100)}%</td>
                       <td className="p-2 align-top text-muted">
                         {p.exampleImage ? (
                           // eslint-disable-next-line @next/next/no-img-element -- Commons thumb preview
