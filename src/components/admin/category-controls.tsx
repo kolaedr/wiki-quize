@@ -135,29 +135,36 @@ export function NewCategoryForm({
 }) {
   const [slug, setSlug] = useState("");
   const [en, setEn] = useState("");
-  const [uk, setUk] = useState("");
   const [icon, setIcon] = useState("deck");
   const [parentId, setParentId] = useState(presetParentId ?? "");
+  // extra languages by ISO code (English is the root, always)
+  const [langs, setLangs] = useState<{ code: string; name: string }[]>([{ code: "uk", name: "" }]);
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
 
+  const setLang = (i: number, patch: Partial<{ code: string; name: string }>) =>
+    setLangs((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
   const submit = () =>
     start(async () => {
-      const r = await createCategoryAction(slug, en, uk, icon, presetParentId ?? parentId);
+      const title: Record<string, string> = { en: en.trim() };
+      for (const l of langs)
+        if (/^[a-z]{2,3}$/.test(l.code.trim()) && l.name.trim())
+          title[l.code.trim()] = l.name.trim();
+      const r = await createCategoryAction(slug, title, icon, presetParentId ?? parentId);
       setResult(r);
       if (r.ok) {
         setSlug("");
         setEn("");
-        setUk("");
+        setLangs([{ code: "uk", name: "" }]);
       }
     });
 
   return (
     <div className="glass-card flex flex-col gap-2 p-3">
-      <div className="grid gap-2 sm:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-3">
         <Input className="h-10" placeholder="slug (auto)" value={slug} onChange={(e) => setSlug(e.target.value)} />
-        <Input className="h-10" placeholder="Назва (EN)" value={en} onChange={(e) => setEn(e.target.value)} />
-        <Input className="h-10" placeholder="Назва (UK)" value={uk} onChange={(e) => setUk(e.target.value)} />
+        <Input className="h-10" placeholder="Name (English — root)" value={en} onChange={(e) => setEn(e.target.value)} />
         <select
           value={icon}
           onChange={(e) => setIcon(e.target.value)}
@@ -168,6 +175,43 @@ export function NewCategoryForm({
           ))}
         </select>
       </div>
+
+      {/* extra languages by ISO code */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] text-muted">Назви іншими мовами (ISO-код: uk, de, es…):</span>
+        {langs.map((l, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              className="h-9 w-16"
+              placeholder="uk"
+              value={l.code}
+              onChange={(e) => setLang(i, { code: e.target.value.toLowerCase() })}
+            />
+            <Input
+              className="h-9 flex-1"
+              placeholder="назва цією мовою"
+              value={l.name}
+              onChange={(e) => setLang(i, { name: e.target.value })}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setLangs((ls) => ls.filter((_, j) => j !== i))}
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        ))}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="self-start"
+          onClick={() => setLangs((ls) => [...ls, { code: "", name: "" }])}
+        >
+          <Plus size={13} /> мова
+        </Button>
+      </div>
+
       {!presetParentId && parents.length > 0 && (
         <select
           value={parentId}

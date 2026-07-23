@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { ACTIVE_LOCALES } from "@/i18n/locales";
 import { filterWorkingUrls } from "@/lib/validate-urls";
-import { qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
+import { commonsThumb, qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
 import {
   autoGamesFor,
   buildTopicQuery,
@@ -462,22 +462,35 @@ export async function enrichRefs(
   if (qids.size === 0) return;
 
   const labelMap = new Map<string, Record<string, string>>();
+  const imageMap = new Map<string, string>();
   const all = [...qids];
   for (let i = 0; i < all.length; i += 150) {
     const chunk = all.slice(i, i + 150);
-    const q = `SELECT ?item ${locales.map((l) => `?l_${l}`).join(" ")} WHERE {
+    // labels + an image so ref CARDS show a picture (flag > coat of arms >
+    // logo > generic image), whichever the referenced entity has.
+    const q = `SELECT ?item ${locales.map((l) => `?l_${l}`).join(" ")} ?flag ?arms ?logo ?img WHERE {
   VALUES ?item { ${chunk.map((x) => `wd:${x}`).join(" ")} }
   ${locales.map((l) => `OPTIONAL { ?item rdfs:label ?l_${l} . FILTER(LANG(?l_${l}) = "${l}") }`).join("\n  ")}
+  OPTIONAL { ?item wdt:P41 ?flag . }
+  OPTIONAL { ?item wdt:P94 ?arms . }
+  OPTIONAL { ?item wdt:P154 ?logo . }
+  OPTIONAL { ?item wdt:P18 ?img . }
 }`;
     const rows = await sparqlQuery(q);
     for (const row of rows) {
       const qid = qidFromUri(row.item?.value ?? "");
+      if (!qid) continue;
       const labels: Record<string, string> = {};
       for (const l of locales) {
         const v = row[`l_${l}`]?.value;
         if (v) labels[l] = v;
       }
       if (labels.en) labelMap.set(qid, labels);
+      if (!imageMap.has(qid)) {
+        const raw =
+          row.flag?.value ?? row.arms?.value ?? row.logo?.value ?? row.img?.value;
+        if (raw) imageMap.set(qid, commonsThumb(raw, 320));
+      }
     }
   }
 
@@ -489,7 +502,7 @@ export async function enrichRefs(
           .map((x) =>
             typeof x === "string"
               ? labelMap.has(x)
-                ? { qid: x, labels: labelMap.get(x)! }
+                ? { qid: x, labels: labelMap.get(x)!, image: imageMap.get(x) }
                 : null
               : x,
           )

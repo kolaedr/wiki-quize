@@ -451,32 +451,38 @@ export async function createTopicAction(
   }
 }
 
-/** Create a browse category (top-level grouping of datasets), optionally nested. */
+/**
+ * Create a browse category, optionally nested. `title` is per-locale
+ * ({ en: required root, uk, de, … }) — English is the root, extra languages are
+ * added by ISO code so users/wiki data can be tied per language later.
+ */
 export async function createCategoryAction(
   slug: string,
-  titleEn: string,
-  titleUk: string,
+  title: Record<string, string>,
   icon: string,
   parentId = "",
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
-  if (!titleEn.trim()) return { ok: false, message: "Назва (EN) обовʼязкова" };
-  // slug auto-derived from the EN name when left blank (placeholder = "auto")
-  const s = (slug.trim() || titleEn)
+  const en = (title?.en ?? "").trim();
+  if (!en) return { ok: false, message: "English name is required (root language)" };
+  const s = (slug.trim() || en)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
   if (!/^[a-z0-9-]{2,40}$/.test(s))
-    return { ok: false, message: "Назва має містити латинські літери/цифри для slug" };
-  const title = { en: titleEn.trim(), ...(titleUk.trim() ? { uk: titleUk.trim() } : {}) };
+    return { ok: false, message: "English name must contain latin letters/digits for the slug" };
+  // keep only non-empty locale values, en first
+  const cleaned: Record<string, string> = { en };
+  for (const [loc, name] of Object.entries(title))
+    if (loc !== "en" && /^[a-z]{2,3}$/.test(loc) && name?.trim()) cleaned[loc] = name.trim();
   try {
     await db
       .insert(categories)
-      .values({ slug: s, title, icon: icon || null, parentId: parentId || null })
+      .values({ slug: s, title: cleaned, icon: icon || null, parentId: parentId || null })
       .onConflictDoUpdate({
         target: categories.slug,
-        set: { title, icon: icon || null, parentId: parentId || null },
+        set: { title: cleaned, icon: icon || null, parentId: parentId || null },
       });
     revalidatePath("/admin");
     revalidatePath("/");
