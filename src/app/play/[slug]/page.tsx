@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { LevelMap } from "@/components/game/level-map";
 import { resolveText } from "@/i18n/locales";
 import { getAdminSession } from "@/lib/admin/guard";
@@ -27,11 +28,21 @@ export default async function GameLevelsPage({
   if (!meta) notFound();
 
   return (
-    <LevelMap
-      slug={meta.slug}
-      title={resolveText(meta.title, locale)}
-      icon={(meta.style as { icon?: string }).icon}
-      levels={meta.config.levels}
-    />
+    <>
+      <div className="mx-auto w-full max-w-2xl px-5 pt-2">
+        <Breadcrumbs
+          items={[
+            { href: `/category/${meta.topic.slug}`, label: resolveText(meta.topic.title, locale) },
+            { label: resolveText(meta.title, locale) },
+          ]}
+        />
+      </div>
+      <LevelMap
+        slug={meta.slug}
+        title={resolveText(meta.title, locale)}
+        icon={(meta.style as { icon?: string }).icon}
+        levels={meta.config.levels}
+      />
+    </>
   );
 }

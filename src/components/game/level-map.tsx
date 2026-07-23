@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Check, ChevronLeft, Lock, Star } from "lucide-react";
+import { Check, Lock, Star } from "lucide-react";
 import { GameIcon } from "@/components/game-icon";
 import { useProgress } from "@/stores/progress";
 
@@ -23,16 +23,6 @@ export function LevelMap({ slug, title, icon, levels }: Props) {
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-2xl items-center justify-between px-5 pt-4">
-        <Link
-          href="/"
-          className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-fg"
-        >
-          <ChevronLeft size={16} />
-          {t("app.name")}
-        </Link>
-      </header>
-
       <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
         <div className="flex items-center gap-3">
           <GameIcon name={icon} size={28} />

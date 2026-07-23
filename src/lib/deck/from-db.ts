@@ -47,6 +47,7 @@ export interface GameMeta {
   style: { emoji?: string };
   config: GameConfig;
   topicId: string;
+  topic: { slug: string; title: LocalizedText };
 }
 
 export interface GameDecks extends GameMeta {
@@ -79,9 +80,10 @@ export async function loadGameMeta(
   slug: string,
   includeUnlisted = false,
 ): Promise<GameMeta | null> {
-  const [game] = await db
-    .select()
+  const [row] = await db
+    .select({ game: games, topicSlug: topics.slug, topicTitle: topics.title })
     .from(games)
+    .innerJoin(topics, eq(topics.id, games.topicId))
     .where(
       and(
         eq(games.slug, slug),
@@ -91,7 +93,8 @@ export async function loadGameMeta(
       ),
     )
     .limit(1);
-  if (!game) return null;
+  if (!row) return null;
+  const game = row.game;
   return {
     gameId: game.id,
     slug: game.slug,
@@ -100,6 +103,7 @@ export async function loadGameMeta(
     style: (game.style ?? {}) as { emoji?: string },
     config: parseConfig(game.config),
     topicId: game.topicId,
+    topic: { slug: row.topicSlug, title: row.topicTitle },
   };
 }
 

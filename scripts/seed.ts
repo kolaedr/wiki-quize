@@ -199,11 +199,15 @@ async function main() {
   await db.delete(topicEntities).where(eq(topicEntities.topicId, brandsTopic.id));
   const nB = BRANDS.length;
   let logosOk = 0;
+  const logoByBrandQid = new Map<string, string>();
   await db.insert(topicEntities).values(
     BRANDS.map((x, i) => {
       // first WORKING logo candidate — no broken logos in the game
       const logo = brandLogoUrls(x).find((u) => ok.has(u));
-      if (logo) logosOk++;
+      if (logo) {
+        logosOk++;
+        logoByBrandQid.set(x.qid, logo);
+      }
       return {
         topicId: brandsTopic.id,
         wikidataQid: x.qid,
@@ -248,7 +252,8 @@ async function main() {
       wikidataQid: x.id,
       labels: { en: x.name, uk: x.name },
       values: {
-        brand: [modelBrandRef(x)],
+        // ref carries the BRAND LOGO — images are always preferred in cards
+        brand: [{ ...modelBrandRef(x), image: logoByBrandQid.get(x.brand.qid) }],
         year: x.year,
       },
       wikiLinks: { en: `https://en.wikipedia.org/wiki/${x.brand.name.replaceAll(" ", "_")}_${x.name.replaceAll(" ", "_")}` },

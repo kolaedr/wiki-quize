@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { ChevronLeft, ImageOff } from "lucide-react";
+import { ImageOff } from "lucide-react";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { db } from "@/db";
 import { topicEntities, topics } from "@/db/schema";
 import { ActionButton } from "@/components/admin/action-button";
@@ -48,15 +49,11 @@ export default async function AdminTopicPage({
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 pt-4">
-        <Link href="/admin" className="flex items-center gap-1 text-sm text-muted hover:text-fg">
-          <ChevronLeft size={16} />
-          Адмінка
-        </Link>
-        <Badge variant="muted">вимкнено: {total}</Badge>
-      </header>
-
-      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-3 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <Breadcrumbs items={[{ href: "/admin", label: "Адмінка" }, { label: resolveText(topic.title, "uk") }]} />
+          <Badge variant="muted">вимкнено: {total}</Badge>
+        </div>
         <h1 className="font-display text-2xl font-bold">
           {resolveText(topic.title, "uk")} — айтеми
         </h1>

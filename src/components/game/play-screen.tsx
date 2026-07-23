@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, Square, Swords, LayoutGrid } from "lucide-react";
+import { Square, Swords, LayoutGrid } from "lucide-react";
+import { Breadcrumbs, type Crumb } from "@/components/breadcrumbs";
 import type { BinaryCard, ChoiceCard } from "@/lib/deck/types";
 import { useProgress } from "@/stores/progress";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
@@ -26,7 +26,8 @@ interface Props {
   /** Set for level-based games — passing the level unlocks the next one. */
   slug?: string;
   level?: number;
-  backHref?: string;
+  /** breadcrumb trail shown above the board */
+  crumbs?: Crumb[];
 }
 
 /**
@@ -44,7 +45,7 @@ export function PlayScreen({
   seed,
   slug,
   level,
-  backHref = "/",
+  crumbs = [],
 }: Props) {
   const t = useTranslations();
   const { layout, setLayout } = useSettings();
@@ -90,14 +91,8 @@ export function PlayScreen({
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-lg items-center justify-between px-5 pt-4">
-        <Link
-          href={backHref}
-          className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-fg"
-        >
-          <ChevronLeft size={16} />
-          {t("app.name")}
-        </Link>
+      <div className="mx-auto flex w-full max-w-lg items-center justify-between gap-3 px-5 pt-2">
+        <Breadcrumbs items={crumbs} className="flex-1" />
         {showLayoutSwitch ? (
           <div
             role="radiogroup"
@@ -128,7 +123,7 @@ export function PlayScreen({
         ) : (
           <span />
         )}
-      </header>
+      </div>
       {board}
     </>
   );

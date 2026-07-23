@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { GameIcon } from "@/components/game-icon";
 import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
@@ -33,17 +34,8 @@ export default async function CategoryPage({
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pt-4">
-        <Link
-          href="/"
-          className="flex items-center gap-1 text-sm text-muted transition-colors hover:text-fg"
-        >
-          <ChevronLeft size={16} />
-          {t("app.name")}
-        </Link>
-      </header>
-
-      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+        <Breadcrumbs items={[{ label: resolveText(data.topic.title, locale) }]} />
         <div className="flex items-center gap-3">
           <GameIcon name={(data.topic.sourceConfig as { icon?: string })?.icon} size={28} />
           <h1 className="font-display text-2xl font-bold">

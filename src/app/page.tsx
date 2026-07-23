@@ -1,12 +1,9 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChevronRight, Globe2, Play, Shield } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { UserButton } from "@/components/auth/user-button";
+import { ChevronRight, Globe2, Play } from "lucide-react";
 import { GameIcon } from "@/components/game-icon";
 import { Button } from "@/components/ui/button";
 import { resolveText } from "@/i18n/locales";
-import { getAdminSession } from "@/lib/admin/guard";
 import { listCategories } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic"; // categories come from the DB
@@ -15,32 +12,10 @@ export const dynamic = "force-dynamic"; // categories come from the DB
 export default async function Home() {
   const t = await getTranslations();
   const locale = await getLocale();
-  const [categories, adminSession] = await Promise.all([
-    listCategories(),
-    getAdminSession(),
-  ]);
+  const categories = await listCategories();
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pt-4">
-        <span className="font-display text-lg font-semibold tracking-tight">
-          {t("app.name")}
-        </span>
-        <div className="flex items-center gap-2">
-          {adminSession && (
-            <Link
-              href="/admin"
-              title="Admin"
-              className="glass-card flex h-10 w-10 items-center justify-center text-muted transition-colors hover:text-accent"
-            >
-              <Shield size={17} />
-            </Link>
-          )}
-          <UserButton />
-          <ThemeToggle />
-        </div>
-      </header>
-
       <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="font-display max-w-xs bg-gradient-to-br from-fg via-fg to-accent bg-clip-text text-3xl font-bold leading-tight tracking-tight text-transparent">

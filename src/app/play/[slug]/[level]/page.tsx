@@ -51,7 +51,11 @@ export default async function GameLevelPage({
       seed={`${seed}#L${decks.level}`}
       slug={decks.slug}
       level={decks.level}
-      backHref={`/play/${decks.slug}`}
+      crumbs={[
+        { href: `/category/${decks.topic.slug}`, label: resolveText(decks.topic.title, locale) },
+        { href: `/play/${decks.slug}`, label: resolveText(decks.title, locale) },
+        { label: `${decks.level}` },
+      ]}
     />
   );
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, eq, sql } from "drizzle-orm";
-import { ChevronLeft, Database, Gamepad2, ListChecks } from "lucide-react";
+import { Database, Gamepad2, ListChecks } from "lucide-react";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { db } from "@/db";
 import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
@@ -44,15 +45,8 @@ export default async function AdminPage() {
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 pt-4">
-        <Link href="/" className="flex items-center gap-1 text-sm text-muted hover:text-fg">
-          <ChevronLeft size={16} />
-          WikiQuize
-        </Link>
-        <span className="glass-card px-3 py-1 text-xs text-accent">admin</span>
-      </header>
-
-      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-4">
+        <Breadcrumbs items={[{ label: "Адмінка" }]} />
         {/* Topics: import presets by click */}
         <section className="flex flex-col gap-3">
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted">

@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
-import { ChevronLeft, Crown, Gamepad2, Medal, Trophy } from "lucide-react";
+import { Crown, Gamepad2, Medal, Trophy } from "lucide-react";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { db } from "@/db";
 import { games, sessions } from "@/db/schema";
 import { user } from "@/db/auth-schema";
@@ -88,22 +89,18 @@ export default async function MePage({
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 pt-4">
-        <Link href="/" className="flex items-center gap-1 text-sm text-muted hover:text-fg">
-          <ChevronLeft size={16} />
-          {t("app.name")}
-        </Link>
-        <SignOutButton />
-      </header>
-
-      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-4">
+        <Breadcrumbs items={[{ label: t("auth.cabinet") }]} />
         {/* profile + totals */}
         <div className="glass-card flex flex-col gap-4 p-5">
-          <div>
-            <h1 className="font-display text-2xl font-bold">
-              {session.user.name || session.user.email}
-            </h1>
-            <p className="text-xs text-muted">{session.user.email}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="font-display text-2xl font-bold">
+                {session.user.name || session.user.email}
+              </h1>
+              <p className="text-xs text-muted">{session.user.email}</p>
+            </div>
+            <SignOutButton />
           </div>
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>

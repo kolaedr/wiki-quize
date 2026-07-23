@@ -1,10 +1,12 @@
 import { rngFromSeed, shuffle } from "@/lib/rng";
 import type { BinaryCard, BuildChoiceOptions, ChoiceCard, DeckEntity } from "./types";
 
-/** {qid, labels} reference stored inside entity values (languages, origin countries…). */
+/** {qid, labels, image?} reference stored inside entity values (languages, origin countries…). */
 export interface EntityRef {
   qid: string;
   labels: Record<string, string | undefined>;
+  /** optional visual for the ref (e.g. brand logo) — images are ALWAYS preferred in cards */
+  image?: string;
 }
 
 export function refsOf(e: DeckEntity, role: string): EntityRef[] {
@@ -141,7 +143,11 @@ export function buildRefChoiceDeck(
     if (distractors.length < optionCount - 1) continue;
 
     const options = shuffle(
-      [correct, ...distractors].map((r) => ({ key: r.qid, label: refLabel(r) })),
+      [correct, ...distractors].map((r) => ({
+        key: r.qid,
+        label: refLabel(r),
+        image: r.image,
+      })),
       rnd,
     );
 
@@ -468,9 +474,13 @@ export function buildRefParentDeck(
     cards.push({
       id: `${g.ref.qid}-${cards.length}`,
       mechanic: "choice",
-      prompt: { label: refLabel(g.ref) },
+      prompt: { label: refLabel(g.ref), image: g.ref.image },
       options: shuffle(
-        [correct, ...distractors].map((e) => ({ key: e.qid, label: label(e) })),
+        [correct, ...distractors].map((e) => ({
+          key: e.qid,
+          label: label(e),
+          image: e.imageUrl ?? undefined,
+        })),
         rnd,
       ),
       correctKey: correct.qid,
