@@ -22,6 +22,20 @@ export interface ActionResult {
   message: string;
 }
 
+/**
+ * Drizzle wraps DB failures as "Failed query: <sql>" and hides the real
+ * Postgres reason in `err.cause`. Surface the cause so admin errors are
+ * actionable, and hint at an unapplied migration when a table/column is
+ * missing.
+ */
+function dbError(err: unknown): string {
+  const e = err as { cause?: { message?: string }; message?: string };
+  const raw = (e?.cause?.message ?? e?.message ?? String(err)).trim();
+  if (/does not exist/i.test(raw))
+    return `${raw} — схоже, не застосовано міграцію: npm run db:migrate`;
+  return raw.slice(0, 240);
+}
+
 /** Admin button: import / resync a topic (code preset OR no-code definition). */
 export async function importPresetAction(presetKey: string): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
@@ -35,7 +49,7 @@ export async function importPresetAction(presetKey: string): Promise<ActionResul
       message: `${report.accepted} entities (fetched ${report.fetched}, dropped: labels ${report.droppedNoLabels}, fields ${report.droppedMissingRequired})`,
     };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 300) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -65,7 +79,7 @@ export async function setGameStatusAction(
     revalidatePath("/");
     return { ok: true, message: status };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 200) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -83,7 +97,7 @@ export async function searchClassesAction(query: string): Promise<ClassSearchRes
   try {
     return { ok: true, classes: await searchClasses(query) };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 200) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -143,7 +157,7 @@ export async function probeClassAction(classQidsRaw: string): Promise<ProbeResul
       sample,
     };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 300) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -179,7 +193,7 @@ export async function createTopicAction(def: TopicDef): Promise<ActionResult> {
       } сутностей; ігри створено як unlisted — публікуй у розділі «Ігри»`,
     };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 300) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -191,9 +205,15 @@ export async function createCategoryAction(
   icon: string,
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
-  const s = slug.trim().toLowerCase();
-  if (!/^[a-z0-9-]{2,40}$/.test(s)) return { ok: false, message: "slug: a-z, 0-9, -" };
   if (!titleEn.trim()) return { ok: false, message: "Назва (EN) обовʼязкова" };
+  // slug auto-derived from the EN name when left blank (placeholder = "auto")
+  const s = (slug.trim() || titleEn)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  if (!/^[a-z0-9-]{2,40}$/.test(s))
+    return { ok: false, message: "Назва має містити латинські літери/цифри для slug" };
   try {
     await db
       .insert(categories)
@@ -213,7 +233,7 @@ export async function createCategoryAction(
     revalidatePath("/");
     return { ok: true, message: "категорію збережено" };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 200) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -232,7 +252,7 @@ export async function setTopicCategoryAction(
     revalidatePath("/");
     return { ok: true, message: "категорію призначено" };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 200) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -251,7 +271,7 @@ export async function resetContentAction(): Promise<ActionResult> {
     revalidatePath("/");
     return { ok: true, message: "базу контенту очищено" };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 200) };
+    return { ok: false, message: dbError(err) };
   }
 }
 
@@ -272,6 +292,6 @@ export async function toggleEntityAction(entityId: string): Promise<ActionResult
     revalidatePath("/admin", "layout");
     return { ok: true, message: row.excluded ? "увімкнено" : "вимкнено" };
   } catch (err) {
-    return { ok: false, message: String(err).slice(0, 200) };
+    return { ok: false, message: dbError(err) };
   }
 }
