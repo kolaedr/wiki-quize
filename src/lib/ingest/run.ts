@@ -135,6 +135,11 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     def!.fields.map((f) => ({ role: f.role, kind: f.kind, wikidataProp: f.prop }));
   const requiredRoles =
     preset?.requiredRoles ?? def!.fields.filter((f) => f.required).map((f) => f.role);
+  // locales to pull: preset uses the app defaults; a def carries its own choice
+  // (locales[0] = root, required; rest optional). Root label gates inclusion.
+  const importLocales =
+    preset || !def!.locales?.length ? [...ACTIVE_LOCALES] : def!.locales;
+  const rootLocale = importLocales[0];
   const sourceConfig = preset
     ? { preset: preset.key, icon }
     : { def: def!, icon };
@@ -179,7 +184,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     // public endpoint (the transitive P279* + GROUP_CONCAT is expensive).
     const rows = preset
       ? await sparqlQuery(preset.query)
-      : await fetchDefRows(def!, ACTIVE_LOCALES);
+      : await fetchDefRows(def!, importLocales);
 
     let droppedNoLabels = 0;
     let droppedMissingRequired = 0;
@@ -187,12 +192,13 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     const entities: RawEntity[] = [];
 
     for (const row of rows) {
-      const e = preset ? preset.normalize(row) : normalizeDefRow(def!, row, ACTIVE_LOCALES);
+      const e = preset ? preset.normalize(row) : normalizeDefRow(def!, row, importLocales);
       if (!e || seen.has(e.qid)) continue;
       seen.add(e.qid);
 
-      // Quality filter 1: labels in ALL active locales (also a quality signal)
-      if (!ACTIVE_LOCALES.every((l) => e.labels[l])) {
+      // Quality filter 1: the ROOT-language label is required (other locales are
+      // optional best-effort fills, added on demand via a later re-sync).
+      if (!e.labels[rootLocale]) {
         droppedNoLabels++;
         continue;
       }
@@ -213,7 +219,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     await enrichRefs(
       entities,
       fieldSchema.filter((f) => f.kind === "entityRefList").map((f) => f.role),
-      ACTIVE_LOCALES,
+      importLocales,
     );
 
     // Quality filter 3: image URL availability — no fake/broken images in games.

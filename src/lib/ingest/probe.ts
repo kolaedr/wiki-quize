@@ -123,6 +123,22 @@ export interface ProbeProperty {
   coverage: number;
 }
 
+export interface ProbeField {
+  prop: string;
+  label: string;
+  kind: TopicFieldDef["kind"] | null;
+  /** one example value (label) from the sample entity */
+  example?: string;
+}
+
+export interface ProbeSample {
+  qid: string;
+  label: string;
+  /** global wiki article count — a popularity proxy, NOT what we store */
+  popularity: number;
+  fields: ProbeField[];
+}
+
 const TYPE_TO_KIND: Record<string, TopicFieldDef["kind"]> = {
   "http://wikiba.se/ontology#CommonsMedia": "image",
   "http://wikiba.se/ontology#Quantity": "number",
@@ -173,6 +189,50 @@ LIMIT 120`;
     });
   }
   return { sampleSize: n, properties };
+}
+
+/**
+ * THE probe: ONE representative (top) entity with its filled properties and
+ * example values. Root language = English. Two light queries — instant, so the
+ * request never hangs. The admin sees the fields, ticks what to pull, and only
+ * THEN runs the heavy batch import.
+ */
+export async function sampleWithFields(classQids: string[]): Promise<ProbeSample | null> {
+  const top = await sparqlQuery(`
+SELECT ?item ?itemLabel ?sl WHERE {
+  { SELECT ?item ?sl WHERE { ${classUnion(classQids)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT 1 }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}`);
+  const qid = qidFromUri(top[0]?.item?.value ?? "");
+  if (!QID_RE.test(qid)) return null;
+
+  const rows = await sparqlQuery(`
+SELECT ?p ?propLabel ?ptype ?vLabel WHERE {
+  wd:${qid} ?pd ?v .
+  ?p wikibase:directClaim ?pd ; wikibase:propertyType ?ptype .
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+} LIMIT 500`);
+  const byProp = new Map<string, ProbeField>();
+  for (const r of rows) {
+    const prop = qidFromUri(r.p?.value ?? "");
+    if (!/^P\d+$/.test(prop) || byProp.has(prop)) continue;
+    byProp.set(prop, {
+      prop,
+      label: r.propLabel?.value ?? prop,
+      kind: TYPE_TO_KIND[r.ptype?.value ?? ""] ?? null,
+      example: r.vLabel?.value,
+    });
+  }
+  // supported fields first
+  const fields = [...byProp.values()].sort(
+    (a, b) => Number(!!b.kind) - Number(!!a.kind),
+  );
+  return {
+    qid,
+    label: top[0]?.itemLabel?.value ?? qid,
+    popularity: Number(top[0]?.sl?.value ?? 0),
+    fields,
+  };
 }
 
 export interface SampleEntity {

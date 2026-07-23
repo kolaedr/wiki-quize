@@ -29,6 +29,12 @@ export interface TopicDef {
   sitelinksMin: number;
   limit: number;
   fields: TopicFieldDef[];
+  /**
+   * Languages to pull. locales[0] is the ROOT (required — an item without it is
+   * dropped); the rest are best-effort (stored if present, never a filter), and
+   * more can be added later via a re-sync. Defaults to ["en"].
+   */
+  locales?: string[];
 }
 
 const QID_RE = /^Q\d+$/;
@@ -65,11 +71,14 @@ export function buildTopicQuery(
   const min = range?.min ?? def.sitelinksMin;
   const maxClause =
     range?.maxExclusive != null ? `FILTER(?sitelinks < ${range.maxExclusive})` : "";
+  // locales[0] = ROOT (required); the rest are OPTIONAL (best-effort per-locale
+  // fill), so adding a language never shrinks the dataset.
   const labelClauses = locales
-    .map(
-      (l) => `?item rdfs:label ?label_${l} FILTER(LANG(?label_${l}) = "${l}") .
-  OPTIONAL { ?article_${l} schema:about ?item ; schema:isPartOf <https://${l}.wikipedia.org/> . }`,
-    )
+    .map((l, i) => {
+      const label = `?item rdfs:label ?label_${l} FILTER(LANG(?label_${l}) = "${l}") .`;
+      const article = `OPTIONAL { ?article_${l} schema:about ?item ; schema:isPartOf <https://${l}.wikipedia.org/> . }`;
+      return i === 0 ? `${label}\n  ${article}` : `OPTIONAL { ${label} }\n  ${article}`;
+    })
     .join("\n  ");
   const labelVars = locales.map((l) => `?label_${l} ?article_${l}`).join(" ");
 

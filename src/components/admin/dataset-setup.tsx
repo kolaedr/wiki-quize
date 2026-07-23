@@ -1,21 +1,29 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  countClassAction,
   probeClassAction,
   searchClassesAction,
   setupTopicAction,
   type ActionResult,
   type ProbeResult,
 } from "@/lib/admin/actions";
-import type { ClassCandidate, ProbeProperty } from "@/lib/ingest/probe";
+import type { ClassCandidate, ProbeField } from "@/lib/ingest/probe";
 import type { TopicFieldDef } from "@/lib/ingest/def";
 
-/** "country of origin" → "countryOfOrigin" (must satisfy the role regex). */
+/** extra languages that can be pulled after the English root */
+const EXTRA_LOCALES = [
+  { code: "uk", label: "Українська" },
+  { code: "de", label: "Deutsch" },
+  { code: "es", label: "Español" },
+  { code: "fr", label: "Français" },
+];
+
 function roleFromLabel(label: string, prop: string): string {
   const words = label.replace(/[^a-zA-Z0-9 ]/g, " ").trim().split(/\s+/).filter(Boolean);
   let role = words
@@ -26,8 +34,7 @@ function roleFromLabel(label: string, prop: string): string {
   return role;
 }
 
-/** Build field defs from picked properties, with unique roles. */
-function fieldsFrom(props: ProbeProperty[]): TopicFieldDef[] {
+function fieldsFrom(props: ProbeField[]): TopicFieldDef[] {
   const out: TopicFieldDef[] = [];
   for (const p of props) {
     if (!p.kind) continue;
@@ -38,13 +45,11 @@ function fieldsFrom(props: ProbeProperty[]): TopicFieldDef[] {
   return out;
 }
 
-const countAt = (dist: { sitelinks: number; n: number }[], t: number) =>
-  dist.reduce((s, d) => (d.sitelinks >= t ? s + d.n : s), 0);
-
 /**
- * Dataset SETUP (dataset-first flow): find the Wikidata class by word, probe
- * it (item counts by threshold, filled properties with coverage, a sample
- * entity), TICK which fields to pull, then import — all on the dataset page.
+ * Dataset SETUP. Root probe (English) is LIGHT: one COUNT + one sample entity
+ * with its fields. Tick which fields to pull and which extra languages to fill
+ * (English is always the root; more can be added later via a re-sync). Only
+ * then does the heavy batch import run.
  */
 export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const router = useRouter();
@@ -52,22 +57,21 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<ClassCandidate[] | null>(null);
   const [manual, setManual] = useState("");
-  const [sitelinksMin, setSitelinksMin] = useState(30);
+  const [threshold, setThreshold] = useState(30);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
-  const [picked, setPicked] = useState<Set<string>>(new Set()); // prop QIDs to pull
+  const [total, setTotal] = useState<number | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [locales, setLocales] = useState<Set<string>>(new Set(["uk"]));
   const [searching, startSearch] = useTransition();
   const [probing, startProbe] = useTransition();
+  const [counting, startCount] = useTransition();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
 
+  const classCsv = classItems.map((c) => c.qid).join(", ");
   const classQids = classItems.map((c) => c.qid);
   const addClass = (c: ClassCandidate) =>
     setClassItems((xs) => (xs.some((x) => x.qid === c.qid) ? xs : [...xs, c]));
-
-  const liveCount = useMemo(
-    () => (probe?.distribution ? countAt(probe.distribution, sitelinksMin) : null),
-    [probe, sitelinksMin],
-  );
 
   const runSearch = () =>
     startSearch(async () => {
@@ -79,14 +83,18 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const runProbe = () =>
     startProbe(async () => {
       setResult(null);
-      const r = await probeClassAction(classQids.join(", "));
+      const r = await probeClassAction(classCsv, threshold);
       setProbe(r);
-      // pre-tick supported fields present on most sampled items
-      if (r.ok && r.properties) {
-        setPicked(
-          new Set(r.properties.filter((p) => p.kind && p.coverage >= 0.6).map((p) => p.prop)),
-        );
+      setTotal(r.total ?? null);
+      if (r.ok && r.sample) {
+        setPicked(new Set(r.sample.fields.filter((f) => f.kind).map((f) => f.prop)));
       }
+    });
+
+  const recount = () =>
+    startCount(async () => {
+      const r = await countClassAction(classCsv, threshold);
+      if (r.ok) setTotal(r.total ?? null);
     });
 
   const addManual = () => {
@@ -95,24 +103,31 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
     setManual("");
   };
 
-  const togglePick = (prop: string) =>
+  const togglePick = (prop: string, on: boolean) =>
     setPicked((s) => {
       const n = new Set(s);
-      if (n.has(prop)) n.delete(prop);
-      else n.add(prop);
+      if (on) n.add(prop);
+      else n.delete(prop);
+      return n;
+    });
+
+  const toggleLocale = (code: string, on: boolean) =>
+    setLocales((s) => {
+      const n = new Set(s);
+      if (on) n.add(code);
+      else n.delete(code);
       return n;
     });
 
   const submit = () =>
     start(async () => {
-      const props = (probe?.properties ?? []).filter((p) => picked.has(p.prop) && p.kind);
-      const fields = fieldsFrom(props);
-      const r = await setupTopicAction(topicSlug, classQids, Number(sitelinksMin) || 0, fields);
+      const fields = fieldsFrom((probe?.sample?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind));
+      const r = await setupTopicAction(topicSlug, classQids, threshold, fields, ["en", ...locales]);
       setResult(r);
-      if (r.ok) router.refresh(); // page now shows imported data
+      if (r.ok) router.refresh();
     });
 
-  const supported = (probe?.properties ?? []).filter((p) => p.kind || p.coverage >= 0.3);
+  const sample = probe?.ok ? probe.sample : null;
 
   return (
     <div className="glass-card flex flex-col gap-3 p-4">
@@ -198,57 +213,44 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
 
       <Button size="sm" className="self-start" disabled={probing || classItems.length === 0} onClick={runProbe}>
         {probing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
-        Розвідка
+        Розвідка (англійська)
       </Button>
 
       {probe && !probe.ok && <p className="text-xs text-danger">{probe.message}</p>}
       {probe?.ok && probe.message && <p className="text-xs text-amber-500">{probe.message}</p>}
 
-      {probe?.ok && probe.distribution && (
+      {sample && (
         <>
-          {/* sample entity — one real item, prominent */}
-          {probe.sample && (
-            <div className="rounded-xl bg-accent-soft/40 p-3 text-xs">
-              <p className="font-semibold text-fg">
-                Приклад айтема: {probe.sample.label}{" "}
-                <span className="font-normal text-muted">
-                  ({probe.sample.qid}, {probe.sample.sitelinks} мовних версій)
-                </span>
-              </p>
-              {Object.entries(probe.sample.values).length > 0 && (
-                <p className="mt-1 text-muted">
-                  {Object.entries(probe.sample.values)
-                    .slice(0, 6)
-                    .map(([p, vals]) => `${p}: ${vals.join(", ")}`)
-                    .join(" · ")}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* threshold picker */}
-          <div className="flex flex-col gap-1 text-xs">
-            <label className="flex items-center gap-2">
-              <span className="text-muted">Поріг «відомості» (sitelinks — у скількох мовах є стаття):</span>
+          {/* sample entity + total */}
+          <div className="rounded-xl bg-accent-soft/40 p-3 text-xs">
+            <p className="font-semibold text-fg">
+              Приклад: {sample.label}{" "}
+              <span className="font-normal text-muted">({sample.qid})</span>
+            </p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted">
+              <span>
+                Скільки буде: <span className="font-semibold text-fg">{total ?? "—"}</span> айтемів при
+                порозі
+              </span>
               <Input
                 type="number"
-                className="h-8 w-20"
-                value={sitelinksMin}
-                onChange={(e) => setSitelinksMin(Number(e.target.value) || 0)}
+                className="h-7 w-16"
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value) || 0)}
               />
-            </label>
-            <span className="font-semibold text-fg">
-              При порозі {sitelinksMin} → {liveCount} айтемів
-            </span>
-            <span className="text-muted">
-              Інші пороги:{" "}
-              {[15, 30, 60, 100].map((t) => `${t}→${countAt(probe.distribution!, t)}`).join(", ")}
-            </span>
+              <Button size="sm" variant="ghost" disabled={counting} onClick={recount}>
+                {counting ? <Loader2 size={12} className="animate-spin" /> : "перерахувати"}
+              </Button>
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted">
+              поріг = скільки вікі-статей має айтем (проксі відомості; популярність прикладу:{" "}
+              {sample.popularity})
+            </p>
           </div>
 
-          {/* fields = checkboxes (what to pull). Pre-ticked from the API. */}
+          {/* fields = checkboxes from the sample entity */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-fg">Які поля тягнути? (галочки)</span>
+            <span className="text-xs font-semibold text-fg">Які поля тягнути?</span>
             <div className="max-h-64 overflow-y-auto rounded-lg border border-line/60">
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-bg/90 text-muted backdrop-blur">
@@ -256,14 +258,14 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
                     <th className="p-2"> </th>
                     <th className="p-2">Поле</th>
                     <th className="p-2">Тип</th>
-                    <th className="p-2">Заповнено</th>
+                    <th className="p-2">Приклад значення</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {supported.map((p) => (
+                  {sample.fields.map((p) => (
                     <tr
                       key={p.prop}
-                      onClick={() => p.kind && togglePick(p.prop)}
+                      onClick={() => p.kind && togglePick(p.prop, !picked.has(p.prop))}
                       className={`border-t border-line/40 ${p.kind ? "cursor-pointer hover:bg-accent-soft/40" : "opacity-40"}`}
                     >
                       <td className="p-2">
@@ -273,12 +275,35 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
                         {p.label} <span className="text-muted">({p.prop})</span>
                       </td>
                       <td className="p-2">{p.kind ?? "—"}</td>
-                      <td className="p-2">{Math.round(p.coverage * 100)}%</td>
+                      <td className="max-w-40 truncate p-2 text-muted">{p.example ?? ""}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* languages: English root + optional extras */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-fg">Мови даних</span>
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <label className="flex items-center gap-1.5 text-muted">
+                <input type="checkbox" checked disabled /> English (root)
+              </label>
+              {EXTRA_LOCALES.map((l) => (
+                <label key={l.code} className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={locales.has(l.code)}
+                    onChange={(e) => toggleLocale(l.code, e.target.checked)}
+                  />
+                  {l.label}
+                </label>
+              ))}
+            </div>
+            <span className="text-[11px] text-muted">
+              English обовʼязкова; решту можна доімпортувати пізніше синхронізацією.
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -292,6 +317,11 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
               </span>
             )}
           </div>
+          {pending && (
+            <p className="text-[11px] text-muted">
+              Імпорт іде батчами — може зайняти хвилину-дві на великому класі, не закривай сторінку.
+            </p>
+          )}
         </>
       )}
     </div>

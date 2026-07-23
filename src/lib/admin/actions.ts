@@ -11,13 +11,11 @@ import {
   type TopicFieldDef,
 } from "@/lib/ingest/def";
 import {
-  discoverProperties,
-  sampleEntity,
+  countForClass,
+  sampleWithFields,
   searchClasses,
-  sitelinksDistribution,
   type ClassCandidate,
-  type ProbeProperty,
-  type SampleEntity,
+  type ProbeSample,
 } from "@/lib/ingest/probe";
 import { MIN_PUBLISHABLE_ITEMS, STARTER_GAMES, runImport } from "@/lib/ingest/run";
 import { getAdminSession } from "./guard";
@@ -221,58 +219,60 @@ export async function searchClassesAction(query: string): Promise<ClassSearchRes
 export interface ProbeResult {
   ok: boolean;
   message?: string;
-  /** sitelinks → item count; any threshold count is computed client-side */
-  distribution?: { sitelinks: number; n: number }[];
-  sampleSize?: number;
-  properties?: ProbeProperty[];
-  sample?: SampleEntity | null;
+  /** how many items exist at the threshold (single COUNT) */
+  total?: number;
+  /** ONE representative entity + its filled fields (root = English) */
+  sample?: ProbeSample | null;
 }
 
+const parseQids = (raw: string) =>
+  raw.split(",").map((s) => s.trim()).filter(Boolean);
+
 /**
- * PIPELINE v2, step 1 — розвідка класу перед імпортом: скільки айтемів існує
- * (розподіл sitelinks), які властивості реально заповнені (тип + покриття %),
- * і як виглядає топ-сутність. Три SPARQL-запити, БЕЗ запису в базу.
+ * LIGHT probe — the whole point of reconnaissance: how many items there will be
+ * (one COUNT) and ONE representative entity with its fields (root = English).
+ * Two fast queries; the heavy full pull happens later in setupTopicAction.
  */
-export async function probeClassAction(classQidsRaw: string): Promise<ProbeResult> {
+export async function probeClassAction(
+  classQidsRaw: string,
+  threshold = 30,
+): Promise<ProbeResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
-  const classQids = classQidsRaw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const classQids = parseQids(classQidsRaw);
   if (classQids.length === 0 || classQids.some((q) => !/^Q\d+$/.test(q)))
     return { ok: false, message: "Класи мають бути виду Q3231690 (через кому)" };
+  const [countRes, sampleRes] = await Promise.allSettled([
+    countForClass(classQids, threshold),
+    sampleWithFields(classQids),
+  ]);
+  const total = countRes.status === "fulfilled" ? countRes.value : undefined;
+  const sample = sampleRes.status === "fulfilled" ? sampleRes.value : null;
+  if (total == null && !sample)
+    return { ok: false, message: "Клас недоступний або завеликий — спробуй вужчий клас." };
+  return {
+    ok: true,
+    total,
+    sample,
+    message: sample ? undefined : "Приклад не завантажився — спробуй ще раз.",
+  };
+}
+
+export interface CountResult {
+  ok: boolean;
+  total?: number;
+  message?: string;
+}
+
+/** Light re-count at a new threshold (used when the admin drags the slider). */
+export async function countClassAction(
+  classQidsRaw: string,
+  threshold: number,
+): Promise<CountResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const classQids = parseQids(classQidsRaw);
+  if (classQids.length === 0) return { ok: false, message: "немає класів" };
   try {
-    // Independent so one timed-out sub-query (big class) still returns partial
-    // probe data instead of failing the whole reconnaissance.
-    const [distRes, discRes] = await Promise.allSettled([
-      sitelinksDistribution(classQids),
-      discoverProperties(classQids),
-    ]);
-    const distribution = distRes.status === "fulfilled" ? distRes.value : [];
-    const discovered =
-      discRes.status === "fulfilled" ? discRes.value : { sampleSize: 0, properties: [] };
-
-    if (distRes.status === "rejected" && discRes.status === "rejected")
-      return {
-        ok: false,
-        message:
-          "Клас завеликий — запити впираються в таймаут Wikidata. Обери вужчий клас або підніми поріг sitelinks.",
-      };
-
-    // preview a top entity with the supported discovered properties
-    const supported = discovered.properties.filter((p) => p.kind).map((p) => p.prop);
-    const sample = await sampleEntity(classQids, supported).catch(() => null);
-    return {
-      ok: true,
-      message:
-        distRes.status === "rejected" || discRes.status === "rejected"
-          ? "Частина розвідки не встигла (клас великий) — показано що вдалось."
-          : undefined,
-      distribution,
-      sampleSize: discovered.sampleSize,
-      properties: discovered.properties,
-      sample,
-    };
+    return { ok: true, total: await countForClass(classQids, Number(threshold) || 0) };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }
@@ -333,12 +333,15 @@ export async function setupTopicAction(
   classQids: string[],
   sitelinksMin: number,
   fields: TopicFieldDef[],
+  locales: string[] = ["en"],
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   try {
     const [topic] = await db.select().from(topics).where(eq(topics.slug, topicSlug)).limit(1);
     if (!topic) return { ok: false, message: "датасет не знайдено" };
     const icon = (topic.sourceConfig as { icon?: string })?.icon ?? "deck";
+    // root = "en" always; keep chosen extras after it, deduped
+    const locs = ["en", ...locales.filter((l) => l && l !== "en")];
     const def: TopicDef = {
       slug: topic.slug,
       title: topic.title as Record<string, string>,
@@ -347,6 +350,7 @@ export async function setupTopicAction(
       sitelinksMin: Number(sitelinksMin) || 0,
       limit: 600,
       fields,
+      locales: locs,
     };
     validateDef(def);
     await db
