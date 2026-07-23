@@ -10,7 +10,7 @@
  * topics/games upsert by slug, entities are replaced per topic; a later
  * admin-panel import of the same preset simply overwrites this data.
  */
-import "dotenv/config";
+import { config } from "dotenv";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { eq } from "drizzle-orm";
@@ -26,6 +26,11 @@ import {
   countryRef,
   modelBrandRef,
 } from "./seed-data";
+
+// Same env precedence as Next.js (and scripts/migrate.ts): .env.local wins,
+// so seed / migrate / the app all write to the SAME database.
+config({ path: ".env" });
+config({ path: ".env.local", override: true });
 
 const url = process.env.DATABASE_URL;
 if (!url) {
