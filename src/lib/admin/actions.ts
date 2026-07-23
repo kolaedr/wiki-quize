@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, games, topicEntities, topics } from "@/db/schema";
-import { validateDef, type TopicDef } from "@/lib/ingest/def";
+import { autoGamesFor, validateDef, type TopicDef } from "@/lib/ingest/def";
 import {
   discoverProperties,
   sampleEntity,
@@ -14,7 +14,7 @@ import {
   type ProbeProperty,
   type SampleEntity,
 } from "@/lib/ingest/probe";
-import { MIN_PUBLISHABLE_ITEMS, runImport } from "@/lib/ingest/run";
+import { MIN_PUBLISHABLE_ITEMS, STARTER_GAMES, runImport } from "@/lib/ingest/run";
 import { getAdminSession } from "./guard";
 
 export interface ActionResult {
@@ -78,6 +78,84 @@ export async function setGameStatusAction(
     revalidatePath("/admin");
     revalidatePath("/");
     return { ok: true, message: status };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/**
+ * PAIR COMPOSER: create/update the selected proposed games for a dataset as
+ * `unlisted`, with admin-edited titles. Level math mirrors the import; a
+ * re-run only refreshes title/config, never the status of an existing game.
+ */
+export async function createGamesAction(
+  topicSlug: string,
+  selections: { slug: string; titleEn: string; titleUk: string }[],
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (selections.length === 0) return { ok: false, message: "нічого не обрано" };
+  try {
+    const [topic] = await db.select().from(topics).where(eq(topics.slug, topicSlug)).limit(1);
+    if (!topic) return { ok: false, message: "датасет не знайдено" };
+    const sc = topic.sourceConfig as { def?: TopicDef; preset?: string } | null;
+    const specs = sc?.def
+      ? autoGamesFor(sc.def)
+      : sc?.preset
+        ? (STARTER_GAMES[sc.preset] ?? [])
+        : [];
+    const bySlug = new Map(specs.map((s) => [s.slug, s]));
+
+    const entities = await db
+      .select({ values: topicEntities.values })
+      .from(topicEntities)
+      .where(and(eq(topicEntities.topicId, topic.id), eq(topicEntities.excluded, false)));
+
+    const PER_LEVEL = 20;
+    let n = 0;
+    for (const sel of selections) {
+      const g = bySlug.get(sel.slug);
+      if (!g) continue;
+      const withRole = g.countRole
+        ? entities.filter((e) => {
+            const v = (e.values as Record<string, unknown>)[g.countRole!];
+            return v != null && (!Array.isArray(v) || v.length > 0);
+          }).length
+        : entities.length;
+      const config = {
+        ...g.config,
+        deckSize: 10,
+        perLevel: PER_LEVEL,
+        levels: Math.max(1, Math.ceil(withRole / PER_LEVEL)),
+        itemsCount: withRole,
+      };
+      const title = {
+        en: sel.titleEn.trim() || g.title.en || g.slug,
+        ...(sel.titleUk.trim()
+          ? { uk: sel.titleUk.trim() }
+          : g.title.uk
+            ? { uk: g.title.uk }
+            : {}),
+      };
+      await db
+        .insert(games)
+        .values({
+          slug: g.slug,
+          topicId: topic.id,
+          mechanic: g.mechanic,
+          config,
+          style: { icon: g.icon },
+          title,
+          status: "unlisted",
+        })
+        .onConflictDoUpdate({
+          target: games.slug,
+          set: { topicId: topic.id, config, title }, // status untouched on existing
+        });
+      n++;
+    }
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: `створено/оновлено ігор: ${n} (unlisted — публікуй у «Ігри»)` };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }
