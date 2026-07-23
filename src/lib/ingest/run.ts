@@ -10,6 +10,7 @@ import {
   normalizeDefRow,
   type TopicDef,
 } from "./def";
+import { countForClass } from "./probe";
 import { PRESETS, type RawEntity } from "./presets";
 
 export interface StarterGame {
@@ -91,9 +92,14 @@ export const STARTER_GAMES: Record<string, StarterGame[]> = {
   ],
 };
 
+/** A game below this many playable items may not be published (would 404). */
+export const MIN_PUBLISHABLE_ITEMS = 8;
+
 export interface ValidationReport {
   fetched: number;
   accepted: number;
+  /** how many items of the class exist at the threshold (def topics only) */
+  totalExisting?: number;
   droppedNoLabels: number;
   droppedMissingRequired: number;
   brokenImages: number;
@@ -162,6 +168,12 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     .returning();
 
   try {
+    // "X of Y existing": how many items the class has at this threshold —
+    // makes the seed-vs-live gap visible in the admin panel (pipeline v2).
+    const totalExisting = def
+      ? await countForClass(def.classQids, def.sitelinksMin).catch(() => undefined)
+      : undefined;
+
     const rows = await sparqlQuery(
       preset ? preset.query : buildTopicQuery(def!, ACTIVE_LOCALES),
     );
@@ -302,6 +314,7 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
     const report: ValidationReport = {
       fetched: rows.length,
       accepted: entities.length,
+      ...(totalExisting != null ? { totalExisting } : {}),
       droppedNoLabels,
       droppedMissingRequired,
       brokenImages,
@@ -314,13 +327,12 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
       .set({ status: "published", syncedAt: new Date(), validationReport: report })
       .where(eq(topics.id, topic.id));
 
-    // Auto-create starter games for this preset (published; idempotent by slug).
-    // Difficulty progression: entities are ranked famous → obscure; each game
-    // splits them into levels of `perLevel` items (level 1 = the best-known).
-    // Games needing labels of RELATED entities (languages, origin countries)
-    // wait for the reference-label enrichment pass — see stage-1 checklist.
+    // Derive games for this topic. PIPELINE v2: games are NEVER auto-published —
+    // new ones are created `unlisted`, the admin previews and publishes with an
+    // explicit button. A re-sync keeps the status of EXISTING games untouched
+    // (only topicId/config refresh). Level math still runs here so the admin
+    // sees playable previews right away.
     const PER_LEVEL = 20;
-    const MIN_PUBLISHABLE_ITEMS = 8;
     const gamesSpec = preset ? (STARTER_GAMES[preset.key] ?? []) : autoGamesFor(def!);
     for (const g of gamesSpec) {
       const withRole = g.countRole
@@ -334,9 +346,9 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
         deckSize: 10,
         perLevel: PER_LEVEL,
         levels: Math.max(1, Math.ceil(withRole / PER_LEVEL)),
+        // stored so the publish gate can refuse too-thin games (would 404)
+        itemsCount: withRole,
       };
-      // Too few playable items → keep out of the catalog (would 404)
-      const status = withRole >= MIN_PUBLISHABLE_ITEMS ? "published" : "unlisted";
       await db
         .insert(games)
         .values({
@@ -346,11 +358,11 @@ export async function runImport(presetKey: string): Promise<ValidationReport> {
           config,
           style: { icon: g.icon },
           title: g.title,
-          status,
+          status: "unlisted", // explicit publish only (pipeline v2)
         })
         .onConflictDoUpdate({
           target: games.slug,
-          set: { topicId: topic.id, status, config },
+          set: { topicId: topic.id, config }, // status of existing games untouched
         });
     }
     await db

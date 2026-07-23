@@ -5,7 +5,14 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { games, topicEntities, topics } from "@/db/schema";
 import { validateDef, type TopicDef } from "@/lib/ingest/def";
-import { runImport } from "@/lib/ingest/run";
+import {
+  discoverProperties,
+  sampleEntity,
+  sitelinksDistribution,
+  type ProbeProperty,
+  type SampleEntity,
+} from "@/lib/ingest/probe";
+import { MIN_PUBLISHABLE_ITEMS, runImport } from "@/lib/ingest/run";
 import { getAdminSession } from "./guard";
 
 export interface ActionResult {
@@ -37,6 +44,20 @@ export async function setGameStatusAction(
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   try {
+    // Publish gate: a game with too few playable items would 404 — refuse.
+    if (status === "published") {
+      const [g] = await db
+        .select({ config: games.config })
+        .from(games)
+        .where(eq(games.id, gameId))
+        .limit(1);
+      const items = (g?.config as { itemsCount?: number } | null)?.itemsCount;
+      if (items != null && items < MIN_PUBLISHABLE_ITEMS)
+        return {
+          ok: false,
+          message: `лише ${items} айтемів — мінімум ${MIN_PUBLISHABLE_ITEMS} для публікації`,
+        };
+    }
     await db.update(games).set({ status }).where(eq(games.id, gameId));
     revalidatePath("/admin");
     revalidatePath("/");
@@ -46,6 +67,49 @@ export async function setGameStatusAction(
   }
 }
 
+
+export interface ProbeResult {
+  ok: boolean;
+  message?: string;
+  /** sitelinks → item count; any threshold count is computed client-side */
+  distribution?: { sitelinks: number; n: number }[];
+  sampleSize?: number;
+  properties?: ProbeProperty[];
+  sample?: SampleEntity | null;
+}
+
+/**
+ * PIPELINE v2, step 1 — розвідка класу перед імпортом: скільки айтемів існує
+ * (розподіл sitelinks), які властивості реально заповнені (тип + покриття %),
+ * і як виглядає топ-сутність. Три SPARQL-запити, БЕЗ запису в базу.
+ */
+export async function probeClassAction(classQidsRaw: string): Promise<ProbeResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const classQids = classQidsRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (classQids.length === 0 || classQids.some((q) => !/^Q\d+$/.test(q)))
+    return { ok: false, message: "Класи мають бути виду Q3231690 (через кому)" };
+  try {
+    const [distribution, discovered] = await Promise.all([
+      sitelinksDistribution(classQids),
+      discoverProperties(classQids),
+    ]);
+    // preview a top entity with the supported discovered properties
+    const supported = discovered.properties.filter((p) => p.kind).map((p) => p.prop);
+    const sample = await sampleEntity(classQids, supported).catch(() => null);
+    return {
+      ok: true,
+      distribution,
+      sampleSize: discovered.sampleSize,
+      properties: discovered.properties,
+      sample,
+    };
+  } catch (err) {
+    return { ok: false, message: String(err).slice(0, 300) };
+  }
+}
 
 /** NO-CODE builder: save a topic definition and run its first import. */
 export async function createTopicAction(def: TopicDef): Promise<ActionResult> {
@@ -74,7 +138,9 @@ export async function createTopicAction(def: TopicDef): Promise<ActionResult> {
     revalidatePath("/");
     return {
       ok: true,
-      message: `${report.accepted} entities; games created (levels by ${report.accepted > 0 ? "difficulty" : "-"})`,
+      message: `${report.accepted}${
+        report.totalExisting != null ? ` з ${report.totalExisting} існуючих` : ""
+      } сутностей; ігри створено як unlisted — публікуй у розділі «Ігри»`,
     };
   } catch (err) {
     return { ok: false, message: String(err).slice(0, 300) };

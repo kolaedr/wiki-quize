@@ -18,7 +18,7 @@ export default async function PlayPage() {
       title={t("game.flagsTitle")}
       duelCards={demoDuelDeck(locale, seed)}
       quadCards={demoQuadDeck(locale, seed)}
-      crumbs={[{ label: "Demo" }]}
+      backHref="/"
     />
   );
 }

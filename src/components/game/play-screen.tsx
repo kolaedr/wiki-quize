@@ -1,9 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Square, Swords, LayoutGrid } from "lucide-react";
-import { Breadcrumbs, type Crumb } from "@/components/breadcrumbs";
+import { Square, Swords, LayoutGrid, ArrowLeft } from "lucide-react";
 import type { BinaryCard, ChoiceCard } from "@/lib/deck/types";
 import { useProgress } from "@/stores/progress";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
@@ -26,8 +26,8 @@ interface Props {
   /** Set for level-based games — passing the level unlocks the next one. */
   slug?: string;
   level?: number;
-  /** breadcrumb trail shown above the board */
-  crumbs?: Crumb[];
+  /** where the back button leads (level map / catalog) */
+  backHref?: string;
 }
 
 /**
@@ -45,7 +45,7 @@ export function PlayScreen({
   seed,
   slug,
   level,
-  crumbs = [],
+  backHref = "/",
 }: Props) {
   const t = useTranslations();
   const { layout, setLayout } = useSettings();
@@ -92,7 +92,14 @@ export function PlayScreen({
   return (
     <>
       <div className="mx-auto flex w-full max-w-lg items-center justify-between gap-3 px-5 pt-2">
-        <Breadcrumbs items={crumbs} className="flex-1" />
+        <Link
+          href={backHref}
+          aria-label={t("game.back")}
+          className="glass-card flex h-10 items-center gap-1.5 rounded-full px-3.5 text-sm text-muted transition-colors hover:text-fg"
+        >
+          <ArrowLeft size={16} />
+          {t("game.back")}
+        </Link>
         {showLayoutSwitch ? (
           <div
             role="radiogroup"

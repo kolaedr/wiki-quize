@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { hapticAnswer } from "@/lib/haptics";
 
 export const FEEDBACK_MS = 1200;
 const LIVES = 3;
@@ -47,6 +48,7 @@ export function useGameSession(
       if (picked || done) return false;
       setPicked(key);
       answersRef.current.push({ key, correct });
+      hapticAnswer(correct); // vibration on mobile (Android; iOS has no API)
       let willEnd = false;
       if (correct) {
         const s = streak + 1;

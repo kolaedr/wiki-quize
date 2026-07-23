@@ -44,6 +44,7 @@
       "moreValue": "Which one has the higher value?",
       "newerThan": "{a} is more recent than {b}"
     },
+    "back": "Back",
     "result": "Deck finished",
     "bestStreak": "Best streak",
     "streak": "streak",

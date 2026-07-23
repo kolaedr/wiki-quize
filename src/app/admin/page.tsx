@@ -65,7 +65,11 @@ export default async function AdminPage() {
               .map((p) => ({ slug: p.slug, title: p.title, topic: null, importKey: p.key })),
           ].map(({ slug, title, topic, importKey }) => {
             const report = topic?.validationReport as
-              | { accepted?: number; fieldCoverage?: Record<string, number> }
+              | {
+                  accepted?: number;
+                  totalExisting?: number;
+                  fieldCoverage?: Record<string, number>;
+                }
               | null
               | undefined;
             return (
@@ -97,6 +101,8 @@ export default async function AdminPage() {
                 </div>
                 {report?.fieldCoverage && (
                   <p className="text-[11px] leading-4 text-muted">
+                    {report.totalExisting != null &&
+                      `Отримано ${report.accepted ?? 0} з ${report.totalExisting} існуючих · `}
                     Покриття полів:{" "}
                     {Object.entries(report.fieldCoverage)
                       .map(([k, v]) => `${k} ${v}`)
