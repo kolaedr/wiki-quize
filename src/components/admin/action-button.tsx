@@ -5,16 +5,29 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ActionResult } from "@/lib/admin/actions";
 
+type IconType = React.ComponentType<{ size?: number }>;
+
 interface Props {
   label: string;
   action: () => Promise<ActionResult>;
-  variant?: "default" | "secondary" | "ghost";
-  /** destructive: require a second click ("точно?") before firing */
+  variant?: "default" | "secondary" | "ghost" | "destructive";
+  /** destructive: require a second click before firing */
   confirm?: boolean;
+  /** optional leading icon (lucide component) */
+  icon?: IconType;
+  /** render just the icon (compact); `label` becomes the tooltip */
+  iconOnly?: boolean;
 }
 
 /** Button bound to a server action, with pending state + inline result message. */
-export function ActionButton({ label, action, variant = "default", confirm = false }: Props) {
+export function ActionButton({
+  label,
+  action,
+  variant = "default",
+  confirm = false,
+  icon: Icon,
+  iconOnly = false,
+}: Props) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [armed, setArmed] = useState(false);
@@ -28,17 +41,21 @@ export function ActionButton({ label, action, variant = "default", confirm = fal
     start(async () => setResult(await action()));
   };
 
+  const glyph = pending ? <Loader2 size={14} className="animate-spin" /> : Icon ? <Icon size={14} /> : null;
+
   return (
     <span className="flex flex-col items-end gap-1">
       <Button
-        size="sm"
-        variant={armed ? "default" : variant}
+        size={iconOnly ? "icon" : "sm"}
+        variant={armed ? "destructive" : variant}
         disabled={pending}
         onClick={run}
         onBlur={() => setArmed(false)}
+        title={iconOnly ? (armed ? `${label}? Клікни ще раз` : label) : undefined}
+        aria-label={iconOnly ? label : undefined}
       >
-        {pending && <Loader2 size={13} className="animate-spin" />}
-        {armed ? "Точно? Ще раз" : label}
+        {glyph}
+        {!iconOnly && (armed ? "Точно? Ще раз" : label)}
       </Button>
       {result && (
         <span
