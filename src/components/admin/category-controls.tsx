@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ICON_NAMES } from "@/components/game-icon";
 import {
   createCategoryAction,
+  setCategoryParentAction,
   setTopicCategoryAction,
   type ActionResult,
 } from "@/lib/admin/actions";
@@ -55,6 +56,49 @@ export function CategorySelect({
         </option>
       ))}
     </select>
+  );
+}
+
+/** Move a category under another parent (or to the top level). */
+export function CategoryParentSelect({
+  slug,
+  currentParentId,
+  options,
+}: {
+  slug: string;
+  currentParentId: string | null;
+  options: CategoryOption[];
+}) {
+  const [value, setValue] = useState(currentParentId ?? "");
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  return (
+    <span className="flex items-center gap-2 text-xs text-muted">
+      під:
+      <select
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const v = e.target.value;
+          setValue(v);
+          start(async () => {
+            const r = await setCategoryParentAction(slug, v);
+            setMsg(r.ok ? "✓" : r.message);
+          });
+        }}
+        className="glass-card h-8 rounded-xl px-2 text-xs text-fg outline-none"
+      >
+        <option value="">— верхній рівень —</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.title}
+          </option>
+        ))}
+      </select>
+      {pending && <Loader2 size={12} className="animate-spin" />}
+      {msg && <span className="text-[11px]">{msg}</span>}
+    </span>
   );
 }
 

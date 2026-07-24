@@ -7,13 +7,16 @@ import { categories, games, topics } from "@/db/schema";
 import { GameIcon } from "@/components/game-icon";
 import {
   AttachDatasetSelect,
+  CategoryParentSelect,
   CategorySelect,
   NewCategoryForm,
   TogglePanel,
   type CategoryOption,
 } from "@/components/admin/category-controls";
+import { ActionButton } from "@/components/admin/action-button";
 import { DraftDatasetForm } from "@/components/admin/draft-dataset-form";
 import { Badge } from "@/components/ui/badge";
+import { deleteCategoryAction } from "@/lib/admin/actions";
 import { resolveText } from "@/i18n/locales";
 
 export const dynamic = "force-dynamic";
@@ -61,10 +64,27 @@ export default async function AdminCategoryPage({
           <ArrowLeft size={15} /> Категорії
         </Link>
       </div>
-      <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
-        <GameIcon name={cat.icon ?? undefined} size={24} />
-        {resolveText(cat.title, "uk")}
-      </h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
+          <GameIcon name={cat.icon ?? undefined} size={24} />
+          {resolveText(cat.title, "uk")}
+        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <CategoryParentSelect
+            slug={cat.slug}
+            currentParentId={cat.parentId}
+            options={options.filter((o) => o.slug !== cat.slug)}
+          />
+          <ActionButton
+            variant="ghost"
+            confirm
+            icon="trash"
+            iconOnly
+            label="Видалити категорію"
+            action={deleteCategoryAction.bind(null, cat.slug)}
+          />
+        </div>
+      </div>
 
       {/* scrape helpers stored on the category */}
       {(() => {

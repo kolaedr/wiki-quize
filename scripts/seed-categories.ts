@@ -82,10 +82,10 @@ const TREE: Node[] = [
     uk: "Історія",
     icon: "scale",
     children: [
-      { slug: "historical-events", en: "Historical events", uk: "Історичні події", icon: "scale", hints: ["historical event"] },
+      { slug: "historical-events", en: "Historical events", uk: "Історичні події", icon: "book", hints: ["historical event"] },
       { slug: "wars-battles", en: "Wars & battles", uk: "Війни та битви", icon: "swords", hints: ["battle", "war"] },
       { slug: "historical-figures", en: "Historical figures", uk: "Історичні постаті", icon: "crown", hints: ["human"], note: "Q5 завеликий — потрібен фільтр (країна P27 / професія P106)" },
-      { slug: "empires", en: "States & empires", uk: "Держави та імперії", icon: "crown", hints: ["former country", "empire"] },
+      { slug: "empires", en: "States & empires", uk: "Держави та імперії", icon: "castle", hints: ["former country", "empire"] },
     ],
   },
   {
@@ -106,7 +106,7 @@ const TREE: Node[] = [
     uk: "Природа",
     icon: "leaf",
     children: [
-      { slug: "animals", en: "Animals", uk: "Тварини", icon: "dog", hints: ["mammal", "species"], note: "taxon Q16521 завеликий — бери конкретні класи" },
+      { slug: "animals", en: "Animals", uk: "Тварини", icon: "paw", hints: ["mammal", "species"], note: "taxon Q16521 завеликий — бери конкретні класи" },
       { slug: "birds", en: "Birds", uk: "Птахи", icon: "bird", hints: ["bird"] },
       { slug: "plants-trees", en: "Plants & trees", uk: "Рослини й дерева", icon: "tree", hints: ["plant", "tree"] },
       { slug: "fungi", en: "Fungi", uk: "Гриби", icon: "sprout", hints: ["fungus"] },
@@ -119,9 +119,9 @@ const TREE: Node[] = [
     uk: "Медицина",
     icon: "stethoscope",
     children: [
-      { slug: "anatomy", en: "Anatomy", uk: "Анатомія", icon: "stethoscope", hints: ["anatomical structure", "organ"] },
+      { slug: "anatomy", en: "Anatomy", uk: "Анатомія", icon: "bone", hints: ["anatomical structure", "organ"] },
       { slug: "diseases", en: "Diseases", uk: "Хвороби", icon: "pill", hints: ["disease"] },
-      { slug: "medications", en: "Medications", uk: "Ліки", icon: "pill", hints: ["medication"] },
+      { slug: "medications", en: "Medications", uk: "Ліки", icon: "syringe", hints: ["medication"] },
     ],
   },
   {

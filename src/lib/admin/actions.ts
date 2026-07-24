@@ -492,6 +492,39 @@ export async function createCategoryAction(
   }
 }
 
+/** Move a category under another parent (or to the top level, parentId=""). */
+export async function setCategoryParentAction(
+  slug: string,
+  parentId: string,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [cat] = await db.select({ id: categories.id }).from(categories).where(eq(categories.slug, slug)).limit(1);
+    if (!cat) return { ok: false, message: "категорію не знайдено" };
+    if (parentId && parentId === cat.id)
+      return { ok: false, message: "категорія не може бути власним батьком" };
+    await db.update(categories).set({ parentId: parentId || null }).where(eq(categories.id, cat.id));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: parentId ? "переміщено" : "піднято на верхній рівень" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Delete a category (datasets become uncategorized; children move to top). */
+export async function deleteCategoryAction(slug: string): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    await db.delete(categories).where(eq(categories.slug, slug));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "категорію видалено" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
 /** Assign a dataset (topic) to a category, or clear it (categoryId=""). */
 export async function setTopicCategoryAction(
   topicSlug: string,
