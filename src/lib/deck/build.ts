@@ -151,14 +151,18 @@ export function buildRefChoiceDeck(
       rnd,
     );
 
+    const promptImage = opts.promptImageRole
+      ? ((q.values[opts.promptImageRole] as string | undefined) ?? undefined)
+      : undefined;
     cards.push({
       id: `${q.qid}-${cards.length}`,
       mechanic: "choice",
       prompt: {
-        label: q.labels[locale] ?? q.labels.en,
-        image: opts.promptImageRole
-          ? ((q.values[opts.promptImageRole] as string | undefined) ?? undefined)
-          : undefined,
+        // the photo IS the question. The entity name would give the answer away
+        // ("Audi A4" → brand Audi), so the label is only a fallback for items
+        // that have no image.
+        label: promptImage ? undefined : (q.labels[locale] ?? q.labels.en),
+        image: promptImage,
       },
       options,
       correctKey: correct.qid,
@@ -476,11 +480,12 @@ export function buildRefParentDeck(
       mechanic: "choice",
       prompt: { label: refLabel(g.ref), image: g.ref.image },
       options: shuffle(
-        [correct, ...distractors].map((e) => ({
-          key: e.qid,
-          label: label(e),
-          image: e.imageUrl ?? undefined,
-        })),
+        [correct, ...distractors].map((e) => {
+          // the model photo is the option; its name would reveal the parent
+          // brand (which is the prompt), so drop the label when we have a picture
+          const img = e.imageUrl ?? undefined;
+          return { key: e.qid, label: img ? undefined : label(e), image: img };
+        }),
         rnd,
       ),
       correctKey: correct.qid,

@@ -311,6 +311,33 @@ export const referrals = pgTable(
   (t) => [index("referrals_inviter_idx").on(t.invitedByUserId)],
 );
 
+export const feedbackKind = pgEnum("feedback_kind", [
+  "topic_request",
+  "idea",
+  "bug",
+  "other",
+]);
+
+/**
+ * User feedback — chiefly "I want this topic" requests that tell the admin what
+ * to parse next, plus general ideas/bugs. Written from a public form guarded by
+ * a micro-captcha; userId is set when the sender is logged in.
+ */
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: feedbackKind("kind").notNull().default("topic_request"),
+    message: text("message").notNull(),
+    /** optional way to reach back (nickname / email / socials) */
+    contact: text("contact"),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    handled: boolean("handled").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("feedback_handled_idx").on(t.handled)],
+);
+
 /**
  * "Challenge a friend": same deck (game + seed) via token, compare results.
  * Optionally scoped to a team, and tied to the author who threw it.

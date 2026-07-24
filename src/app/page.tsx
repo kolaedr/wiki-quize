@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ChevronRight, Globe2, Play, UserPlus } from "lucide-react";
 import { GameIcon } from "@/components/game-icon";
+import { FeedbackBlock } from "@/components/feedback/feedback-block";
 import { InstallAppBlock } from "@/components/install-app-block";
 import { Button } from "@/components/ui/button";
 import { resolveText } from "@/i18n/locales";
@@ -104,6 +105,8 @@ export default async function Home() {
             </Button>
           </div>
         )}
+
+        <FeedbackBlock />
 
         <InstallAppBlock />
       </main>

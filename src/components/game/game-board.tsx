@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import type { ChoiceCard } from "@/lib/deck/types";
+import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
 import { ResultScreen, StatusBar, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
@@ -47,14 +47,15 @@ export function GameBoard({ title, cards, onFinish }: Props) {
                 src={card.prompt.image}
                 alt=""
                 onError={() => setImgFailed(true)}
-                className="max-h-[60%] max-w-full rounded-lg object-contain drop-shadow-lg"
+                className="max-h-[64%] w-full rounded-xl object-contain drop-shadow-lg"
               />
             ) : card.prompt.emoji ? (
               <span className="text-8xl">{card.prompt.emoji}</span>
+            ) : card.prompt.label ? (
+              // no image → the label carries the question (never shown together
+              // with an image, which would leak the answer)
+              <span className="font-display text-3xl font-bold">{card.prompt.label}</span>
             ) : null}
-            {card.prompt.label && (
-              <span className="font-display text-2xl font-bold">{card.prompt.label}</span>
-            )}
             {s.picked && card.explain.wikiUrl && (
               <a
                 href={card.explain.wikiUrl}
@@ -85,7 +86,7 @@ export function GameBoard({ title, cards, onFinish }: Props) {
               key={o.key}
               onClick={() => s.answer(o.key, isCorrect)}
               disabled={!!s.picked}
-              className={`glass-card px-3 py-4 text-sm font-semibold transition-all active:scale-95 ${
+              className={`glass-card flex min-h-[4.5rem] items-center justify-center px-3 py-3 text-center text-sm font-semibold transition-all active:scale-95 ${
                 state === "correct"
                   ? "border-success text-success shadow-glow"
                   : state === "wrong"
@@ -95,7 +96,7 @@ export function GameBoard({ title, cards, onFinish }: Props) {
                       : "hover:border-accent"
               }`}
             >
-              {o.label}
+              <OptionContent option={o} />
             </button>
           );
         })}
@@ -104,4 +105,28 @@ export function GameBoard({ title, cards, onFinish }: Props) {
       <StreakBadge streak={s.streak} />
     </main>
   );
+}
+
+/**
+ * An option's content: show its IMAGE when it has one (brand logo, flag, photo)
+ * — that's what makes the game visual — with the label only as a small caption.
+ * Falls back to text when there's no image or it fails to load.
+ */
+function OptionContent({ option }: { option: ChoiceOption }) {
+  const [failed, setFailed] = useState(false);
+  if (option.image && !failed) {
+    return (
+      <span className="flex flex-col items-center gap-1">
+        {/* eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ text fallback */}
+        <img
+          src={option.image}
+          alt=""
+          onError={() => setFailed(true)}
+          className="max-h-14 max-w-full object-contain"
+        />
+        {option.label && <span className="text-xs font-medium text-muted">{option.label}</span>}
+      </span>
+    );
+  }
+  return <span>{option.label ?? option.emoji ?? ""}</span>;
 }
