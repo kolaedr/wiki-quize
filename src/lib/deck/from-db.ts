@@ -37,6 +37,10 @@ export interface GameConfig {
   singleTmpl?: string;
   /** choice: emoji-content fallback role for broken images (e.g. flagEmoji) */
   emojiRole?: string;
+  /** choice over a plain text attribute (element symbol, ISO code…) */
+  textRole?: string;
+  /** text quiz direction: false = name→value (default), true = value→name */
+  textAsPrompt?: boolean;
 }
 
 export interface GameMeta {
@@ -73,6 +77,8 @@ function parseConfig(raw: unknown): GameConfig {
     roles: c.roles,
     singleTmpl: c.singleTmpl,
     emojiRole: c.emojiRole,
+    textRole: c.textRole,
+    textAsPrompt: c.textAsPrompt,
   };
 }
 
@@ -154,6 +160,12 @@ export async function loadGameDecks(
     entities = all.filter((e) => Number.isFinite(Number(e.values[role])) && Number(e.values[role]) > 0);
   } else if (cfg.refRole) {
     entities = all.filter((e) => refsOf(e, cfg.refRole!).length > 0);
+  } else if (cfg.textRole) {
+    const role = cfg.textRole;
+    entities = all.filter((e) => {
+      const v = e.values[role];
+      return typeof v === "string" && v.trim().length > 0;
+    });
   } else {
     const role = cfg.answerRole ?? "flag";
     entities = all.filter((e) => e.values[role] != null);
@@ -234,6 +246,45 @@ export async function loadGameDecks(
         promptImageRole: cfg.promptImageRole,
       });
     }
+    return result;
+  }
+
+  // choice — a plain TEXT attribute (element symbol, ISO code, motto…). Both
+  // sides are labels: name→value ("which symbol is Iron?") or, reversed,
+  // value→name ("Fe is which element?"). No images, so duel + quad only.
+  if (cfg.textRole) {
+    const trole = cfg.textRole;
+    const hasText = (e: DeckEntity) => {
+      const v = e.values[trole];
+      return typeof v === "string" && v.trim().length > 0;
+    };
+    const withText = entities.filter(hasText);
+    const qWithText = questions.filter(hasText);
+    const text = (e: DeckEntity) => String(e.values[trole] ?? "").trim();
+    const name = (e: DeckEntity) => e.labels[locale] ?? e.labels.en ?? e.qid;
+    const promptFn = cfg.textAsPrompt
+      ? (e: DeckEntity) => ({ label: text(e) })
+      : (e: DeckEntity) => ({ label: name(e) });
+    const optionFn = cfg.textAsPrompt
+      ? (e: DeckEntity) => ({ label: name(e) })
+      : (e: DeckEntity) => ({ label: text(e) });
+
+    result.duelCards = buildChoiceDeck(withText, {
+      ...base,
+      questions: qWithText,
+      seed: `${slug}-L${lvl}-duel-${seed}`,
+      optionCount: 2,
+      prompt: promptFn,
+      option: optionFn,
+    });
+    result.quadCards = buildChoiceDeck(withText, {
+      ...base,
+      questions: qWithText,
+      seed: `${slug}-L${lvl}-quad-${seed}`,
+      optionCount: 4,
+      prompt: promptFn,
+      option: optionFn,
+    });
     return result;
   }
 

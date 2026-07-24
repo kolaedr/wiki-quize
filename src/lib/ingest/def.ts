@@ -12,7 +12,8 @@ import type { RawEntity } from "./presets";
 export interface TopicFieldDef {
   /** role name used in values/config, e.g. "photo", "country", "opened" */
   role: string;
-  kind: "image" | "number" | "date" | "entityRefList";
+  /** text = a short string answer (element symbol, ISO code, motto…) */
+  kind: "image" | "number" | "date" | "entityRefList" | "text";
   /** Wikidata property, e.g. "P18"; "P495|P17" = try either (UNION) */
   prop: string;
   /** entity must have this field to enter the pool */
@@ -128,6 +129,15 @@ function queryShape(def: TopicDef, locales: readonly string[]) {
   return { labelClauses, fieldClauses, groupBy, select };
 }
 
+/**
+ * How to match "instance of" for a class. Q5 (human) is huge AND its instances
+ * are ALWAYS a direct P31 (no human is an instance of a subclass of human), so
+ * the transitive P279* closure is pure cost there and 504s. Every OTHER class
+ * keeps P31/P279* so subclass instances count too (a castle is a subclass of
+ * tourist attraction, a specific car model a subclass of automobile model…).
+ */
+const classPath = (q: string) => (q === "Q5" ? "wdt:P31" : "wdt:P31/wdt:P279*");
+
 export function buildTopicQuery(
   def: TopicDef,
   locales: readonly string[],
@@ -136,11 +146,8 @@ export function buildTopicQuery(
   const min = range?.min ?? def.sitelinksMin;
   const maxClause =
     range?.maxExclusive != null ? `FILTER(?sitelinks < ${range.maxExclusive})` : "";
-  // DIRECT P31 (not P31/P279*) so this matches the probe's estimate exactly and
-  // the optimizer can start from the narrow filter. The transitive closure over
-  // a huge root (Q5 human) is what 504s.
   const classUnion = def.classQids
-    .map((q) => `{ ?item wdt:P31 wd:${q} . }`)
+    .map((q) => `{ ?item ${classPath(q)} wd:${q} . }`)
     .join("\n  UNION\n  ");
   const excludes = (def.excludeClassQids ?? [])
     .map((q) => `MINUS { ?item wdt:P31 wd:${q} . }`)
@@ -170,12 +177,12 @@ LIMIT ${Math.min(def.limit || 500, 5000)}
 /** Fetch the class's item QIDs (famous first) — the list is then chunked into
  *  item-count batches for the import job. */
 export function buildQidListQuery(def: TopicDef, sitelinksMin: number): string {
-  // DIRECT P31 + narrowing FILTERS FIRST. The transitive closure P31/P279* over a
-  // huge root like Q5 (human) is what 504s on this one-shot list fetch; direct P31
-  // matches the probe and lets the optimizer start from the selective filter
-  // (occupation=monarch, ~thousands) instead of enumerating every human.
+  // Narrowing FILTERS FIRST so the optimizer starts from the selective set
+  // (occupation=monarch, ~thousands) instead of the whole class. classPath keeps
+  // P31/P279* for normal classes (subclass instances count) but drops to direct
+  // P31 for Q5 (human), whose P279* closure is what 504s this one-shot fetch.
   const classUnion = def.classQids
-    .map((q) => `{ ?item wdt:P31 wd:${q} . }`)
+    .map((q) => `{ ?item ${classPath(q)} wd:${q} . }`)
     .join("\n  UNION\n  ");
   return `
 SELECT ?item ?sitelinks WHERE {
@@ -243,6 +250,10 @@ export function normalizeDefRow(
       } else if (f.kind === "number") {
         const n = Number(raw);
         if (Number.isFinite(n)) values[f.role] = n;
+      } else if (f.kind === "text") {
+        // plain string answer (element symbol "Fe", ISO code, motto…)
+        const s = raw.trim();
+        if (s) values[f.role] = s;
       } else {
         // date → store the YEAR as a number (comparable by the mechanics)
         const year = Number.parseInt(raw.slice(0, raw.startsWith("-") ? 5 : 4), 10);
@@ -308,6 +319,26 @@ export function autoGamesFor(def: TopicDef): AutoGame[] {
       icon: def.icon,
       mechanic: "choice",
       config: { refRole: f.role, refDirection: "parent" },
+      countRole: f.role,
+    });
+  }
+  // text answer (element symbol, ISO code…): two "choice" quizzes — name→value
+  // ("which symbol is Iron?") and its reverse value→name ("Fe is which element?").
+  for (const f of def.fields.filter((x) => x.kind === "text")) {
+    out.push({
+      slug: `${def.slug}-${f.role}`,
+      title: t({ en: cap(f.role), uk: cap(f.role) }),
+      icon: def.icon,
+      mechanic: "choice",
+      config: { textRole: f.role },
+      countRole: f.role,
+    });
+    out.push({
+      slug: `${def.slug}-${f.role}-rev`,
+      title: t({ en: `Guess by ${f.role}`, uk: `Вгадай за: ${f.role}` }),
+      icon: def.icon,
+      mechanic: "choice",
+      config: { textRole: f.role, textAsPrompt: true },
       countRole: f.role,
     });
   }

@@ -39,6 +39,7 @@ const KIND_UK: Record<string, string> = {
   number: "число",
   date: "дата/рік",
   entityRefList: "звʼязок (інша сутність)",
+  text: "текст (напр. символ)",
 };
 
 /** extra languages that can be pulled after the English root */
@@ -273,6 +274,7 @@ export function DatasetSetup({
   const [candidates, setCandidates] = useState<ClassCandidate[] | null>(null);
   const [manual, setManual] = useState("");
   const [threshold, setThreshold] = useState(30);
+  const [minCoverage, setMinCoverage] = useState(70); // hide sparse fields by default
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -441,9 +443,17 @@ export function DatasetSetup({
       }
     });
 
+  // sorted by coverage (fullest first) so the useful fields are at the top
   const fields = probe?.ok
-    ? (probe.fields ?? []).filter((f) => !NOISY_IMAGE_PROPS.has(f.prop))
+    ? (probe.fields ?? [])
+        .filter((f) => !NOISY_IMAGE_PROPS.has(f.prop))
+        .sort((a, b) => b.coverage - a.coverage)
     : null;
+  // apply the coverage threshold, but never hide a field you've already ticked
+  const visibleFields = (fields ?? []).filter(
+    (f) => Math.round(f.coverage * 100) >= minCoverage || picked.has(f.prop),
+  );
+  const hiddenCount = (fields?.length ?? 0) - visibleFields.length;
   // date/number fields among the PICKED ones — candidates to rank difficulty by
   const diffOptions = fieldsFrom(
     (probe?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind),
@@ -641,11 +651,34 @@ export function DatasetSetup({
             <p className="text-[11px] text-muted">
               Назва тягнеться завжди. Зображення позначені за замовчуванням; решту
               обирай за потреби. «Заповнено» = у скількох із топ-{probe?.sampleSize ?? 3}
-              айтемів є поле.
+              айтемів є поле. Відсортовано за заповненням.
               {probe?.sampleLabels?.length
                 ? ` Приклади з: ${probe.sampleLabels.join(", ")}.`
                 : ""}
             </p>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+              <span>Показувати поля із заповненням ≥</span>
+              <select
+                value={minCoverage}
+                onChange={(e) => setMinCoverage(Number(e.target.value))}
+                className="h-7 rounded-lg border border-line/60 bg-transparent px-1.5 text-fg outline-none focus:border-accent"
+              >
+                {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (
+                  <option key={v} value={v}>
+                    {v}%
+                  </option>
+                ))}
+              </select>
+              {hiddenCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMinCoverage(0)}
+                  className="text-accent underline underline-offset-2"
+                >
+                  показати всі (+{hiddenCount})
+                </button>
+              )}
+            </div>
             <div className="max-h-72 overflow-y-auto rounded-lg border border-line/60">
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-bg/90 text-muted backdrop-blur">
@@ -658,7 +691,7 @@ export function DatasetSetup({
                   </tr>
                 </thead>
                 <tbody>
-                  {fields.map((p) => (
+                  {visibleFields.map((p) => (
                     <tr
                       key={p.prop}
                       onClick={() => p.kind && togglePick(p.prop, !picked.has(p.prop))}

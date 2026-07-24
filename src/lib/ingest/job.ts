@@ -136,7 +136,16 @@ export async function startDefImportJob(
   } catch (err) {
     return { error: `не вдалося отримати список айтемів: ${String(err).slice(0, 120)}` };
   }
-  if (qids.length === 0) return { error: "за цим порогом нема айтемів — знизь поріг" };
+  if (qids.length === 0) {
+    // Echo WHAT was queried — "lower the threshold" is useless when the real
+    // cause is a wrong class or a filter (e.g. photo-only) that excludes everything.
+    const flt = def.filters?.length
+      ? `, фільтри: ${def.filters.map((f) => `${f.prop}=${f.valueQid || "★(є)"}`).join(", ")}`
+      : "";
+    return {
+      error: `нема айтемів. Клас: ${def.classQids.join(", ")}; поріг: ${def.sitelinksMin}${flt}. Перевір клас/фільтри або знизь поріг.`,
+    };
+  }
 
   const batches: string[][] = [];
   for (let i = 0; i < qids.length; i += BATCH_SIZE) batches.push(qids.slice(i, i + BATCH_SIZE));
