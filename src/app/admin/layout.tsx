@@ -4,7 +4,7 @@ import { ArrowUpRight, Shield } from "lucide-react";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { UserButton } from "@/components/auth/user-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { getAdminSession } from "@/lib/admin/guard";
+import { getStaff } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  if (!(await getAdminSession())) redirect("/");
+  const staff = await getStaff();
+  if (!staff) redirect("/");
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -45,7 +46,7 @@ export default async function AdminLayout({
       {/* sidebar + content */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <aside className="shrink-0 border-b border-line/70 px-3 py-3 lg:sticky lg:top-14 lg:h-fit lg:w-56 lg:self-start lg:border-b-0 lg:border-r lg:py-5">
-          <AdminNav />
+          <AdminNav level={staff.level} />
         </aside>
         <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-5 lg:px-8">
           {children}

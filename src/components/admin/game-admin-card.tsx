@@ -24,9 +24,12 @@ export interface AdminGameRow {
 export function GameAdminCard({
   game,
   fieldSchema = [],
+  mod = false,
 }: {
   game: AdminGameRow;
   fieldSchema?: { role: string; kind: string }[];
+  /** moderator view: the editor shows only title + icon */
+  mod?: boolean;
 }) {
   const g = game;
   const cfg = (g.config ?? {}) as {
@@ -99,6 +102,8 @@ export function GameAdminCard({
         valueRole={cfg.valueRole}
         refRole={cfg.refRole}
         cover={style.cover}
+        icon={style.icon}
+        mod={mod}
       />
     </div>
   );

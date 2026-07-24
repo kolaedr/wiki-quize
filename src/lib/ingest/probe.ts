@@ -99,14 +99,18 @@ export async function searchProperties(query: string): Promise<PropertyCandidate
 
 const QID_RE = /^Q\d+$/;
 
-function classUnion(classQids: string[]): string {
+function classUnion(classQids: string[], taxon = false, deep = false): string {
   const qids = classQids.filter((q) => QID_RE.test(q));
   if (qids.length === 0) throw new Error("classQids must be like Q3231690");
-  // PROBE uses DIRECT P31 (no P279* transitive closure). Reconnaissance must be
-  // fast/reliable; the transitive closure is what times out on big classes like
-  // "country" (Q6256). It's an ESTIMATE — the real import (buildTopicQuery) still
-  // uses P31/P279* to also catch subclass instances.
-  return qids.map((q) => `{ ?item wdt:P31 wd:${q} . }`).join("\n  UNION\n  ");
+  // TAXON MODE: animals/plants are all P31 = taxon (Q16521); they relate by
+  // PARENT TAXON (P171), not P31/P279. So match `?item wdt:P171* wd:<clade>` —
+  // e.g. everything under Mammalia. That bounds a huge domain to one branch.
+  if (taxon) return qids.map((q) => `{ ?item wdt:P171* wd:${q} . }`).join("\n  UNION\n  ");
+  // Default PROBE uses DIRECT P31 (fast, an estimate). `deep` adds the P279*
+  // subclass closure — a fallback for "umbrella" classes (e.g. road-sign
+  // groupings) whose items are instances of SUBCLASSES, so direct P31 = 0.
+  const path = deep ? "wdt:P31/wdt:P279*" : "wdt:P31";
+  return qids.map((q) => `{ ?item ${path} wd:${q} . }`).join("\n  UNION\n  ");
 }
 
 /**
@@ -166,15 +170,23 @@ export async function countForClass(
   classQids: string[],
   sitelinksMin: number,
   filters?: Filter[],
+  taxon = false,
 ): Promise<number> {
-  const rows = await sparqlQuery(`
+  const run = async (deep: boolean) => {
+    const rows = await sparqlQuery(`
 SELECT (COUNT(DISTINCT ?item) AS ?n) WHERE {
-  ${classUnion(classQids)}
+  ${classUnion(classQids, taxon, deep)}
   ${filterClauses(filters)}
   ?item wikibase:sitelinks ?sl .
   FILTER(?sl >= ${Math.max(0, Math.floor(sitelinksMin))})
 }`);
-  return Number(rows[0]?.n?.value ?? 0);
+    return Number(rows[0]?.n?.value ?? 0);
+  };
+  const direct = await run(false);
+  // umbrella class with no direct instances → retry including subclasses (P279*),
+  // so the count matches what the import will actually pull.
+  if (direct === 0 && !taxon) return run(true);
+  return direct;
 }
 
 export interface FacetValue {
@@ -196,6 +208,7 @@ const FACET_PROPS: { prop: string; label: string }[] = [
   { prop: "P17", label: "країна" },
   { prop: "P136", label: "жанр" },
   { prop: "P641", label: "спорт" },
+  { prop: "P105", label: "ранг таксона" }, // taxon mode: species/genus/family…
 ];
 
 async function facetOne(
@@ -203,10 +216,11 @@ async function facetOne(
   fp: { prop: string; label: string },
   sitelinksMin: number,
   filters?: Filter[],
+  taxon = false,
 ): Promise<Facet | null> {
   const rows = await sparqlQuery(`
 SELECT ?v ?vLabel (COUNT(DISTINCT ?item) AS ?n) WHERE {
-  ${classUnion(classQids)}
+  ${classUnion(classQids, taxon)}
   ${filterClauses(filters)}
   ?item wikibase:sitelinks ?sl .
   FILTER(?sl >= ${Math.max(0, Math.floor(sitelinksMin))})
@@ -236,9 +250,10 @@ export async function discoverFacets(
   classQids: string[],
   sitelinksMin: number,
   filters?: Filter[],
+  taxon = false,
 ): Promise<Facet[]> {
   const settled = await Promise.allSettled(
-    FACET_PROPS.map((fp) => facetOne(classQids, fp, sitelinksMin, filters)),
+    FACET_PROPS.map((fp) => facetOne(classQids, fp, sitelinksMin, filters, taxon)),
   );
   return settled
     .map((r) => (r.status === "fulfilled" ? r.value : null))
@@ -373,15 +388,21 @@ LIMIT 500`);
 export async function discoverFields(
   classQids: string[],
   filters?: Filter[],
+  taxon = false,
 ): Promise<DiscoveredFields> {
   const N = 3;
   // Sample the top entities WITHIN the filtered set, so previews/fields reflect
   // what the import will actually pull (e.g. Ukrainian humans, not all humans).
-  const top = await sparqlQuery(`
+  const fetchTop = (deep: boolean) =>
+    sparqlQuery(`
 SELECT ?item ?itemLabel WHERE {
-  { SELECT ?item ?sl WHERE { ${classUnion(classQids)} ${filterClauses(filters)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT ${N} }
+  { SELECT ?item ?sl WHERE { ${classUnion(classQids, taxon, deep)} ${filterClauses(filters)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT ${N} }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }`);
+  // direct P31 first; if the class has only subclass instances, retry deep so
+  // fields still show up (the import uses P279* anyway).
+  let top = await fetchTop(false);
+  if (top.length === 0 && !taxon) top = await fetchTop(true);
   const picks = top
     .map((r) => ({ qid: qidFromUri(r.item?.value ?? ""), label: r.itemLabel?.value }))
     .filter((p) => QID_RE.test(p.qid));

@@ -6,11 +6,13 @@ import { categories, topics } from "@/db/schema";
 import { GameIcon } from "@/components/game-icon";
 import { NewCategoryForm, type CategoryOption } from "@/components/admin/category-controls";
 import { resolveText } from "@/i18n/locales";
+import { requireSuperPage } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 
 /** Categories section: nested list + create (optionally under a parent). */
 export default async function AdminCategoriesPage() {
+  await requireSuperPage();
   const [cats, dsCounts] = await Promise.all([
     db.select().from(categories).orderBy(asc(categories.sortOrder)).catch(() => []),
     db

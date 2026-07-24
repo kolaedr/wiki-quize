@@ -14,6 +14,7 @@ import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
 import { importPresetAction, toggleEntityAction } from "@/lib/admin/actions";
 import { proposeGamesForTopic } from "@/lib/admin/compose";
+import { requireSuperPage } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 const PAGE = 20;
@@ -26,6 +27,7 @@ export default async function AdminTopicPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ page?: string }>;
 }) {
+  await requireSuperPage();
   const { slug } = await params;
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1);

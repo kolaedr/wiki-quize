@@ -6,6 +6,7 @@ import { user } from "@/db/auth-schema";
 import { ActionButton } from "@/components/admin/action-button";
 import { Badge } from "@/components/ui/badge";
 import { setFeedbackHandledAction } from "@/lib/feedback/actions";
+import { requireSuperPage } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ const KIND_LABEL: Record<string, string> = {
 
 /** Admin: user feedback — mostly "I want this topic" requests. Open first. */
 export default async function AdminFeedbackPage() {
+  await requireSuperPage();
   const rows = await db
     .select({
       id: feedback.id,

@@ -5,11 +5,13 @@ import { db } from "@/db";
 import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { Button } from "@/components/ui/button";
 import { failStaleJobs } from "@/lib/ingest/run";
+import { requireSuperPage } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 
 /** Admin overview: key counts + the latest import jobs. */
 export default async function AdminOverviewPage() {
+  await requireSuperPage();
   // Jobs killed by the serverless time limit must not show "running" forever
   await failStaleJobs().catch(() => {});
 

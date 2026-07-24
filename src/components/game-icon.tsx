@@ -40,6 +40,7 @@ import {
   Scale,
   Ship,
   Shield,
+  Signpost,
   Smartphone,
   Sprout,
   PawPrint,
@@ -82,6 +83,7 @@ const ICONS: Record<string, LucideIcon> = {
   train: TrainFront,
   ship: Ship,
   anchor: Anchor,
+  sign: Signpost,
   // military
   sword: Sword,
   swords: Swords,
