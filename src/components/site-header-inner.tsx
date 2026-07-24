@@ -20,7 +20,7 @@ export function SiteHeaderInner({ admin }: { admin: boolean }) {
         href="/"
         className="font-display text-lg font-semibold tracking-tight transition-colors hover:text-accent"
       >
-        WikiQuize
+        WikiQuiz
       </Link>
       <div className="flex items-center gap-2">
         {admin && (

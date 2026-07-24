@@ -1,4 +1,4 @@
-/* WikiQuize service worker — PWA basics:
+/* WikiQuiz service worker — PWA basics:
  * - static assets (Next chunks, fonts, icons): cache-first
  * - pages/API: network-first with cache fallback, so an active game
  *   survives a network hiccup after first load

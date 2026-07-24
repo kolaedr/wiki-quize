@@ -1,4 +1,4 @@
-# WikiQuize — Project Documentation
+# WikiQuiz — Project Documentation
 
 *General implementation-facing documentation. v0.3 — 2026-07-22.*
 *Working plan (Ukrainian) lives in [`docs/plan/`](./plan/).*

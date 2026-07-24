@@ -6,7 +6,7 @@
 const ENDPOINT = "https://query.wikidata.org/sparql";
 const USER_AGENT =
   process.env.WIKIMEDIA_UA ??
-  "WikiQuize/0.1 (https://wikiquize.example; dev) ingest-script";
+  "WikiQuiz/0.1 (https://wikiquiz.example; dev) ingest-script";
 
 export type SparqlValue = { type: string; value: string };
 export type SparqlRow = Record<string, SparqlValue | undefined>;

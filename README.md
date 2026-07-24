@@ -1,4 +1,4 @@
-# WikiQuize
+# WikiQuiz
 
 Swipe-based quiz platform built on live Wikipedia/Wikidata data.
 Mobile-first PWA · Next.js · Neon Postgres · Drizzle · Better Auth.

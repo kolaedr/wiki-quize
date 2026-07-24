@@ -3,7 +3,7 @@ import type { TopicFieldDef } from "./def";
 
 const SEARCH_UA =
   process.env.WIKIMEDIA_UA ??
-  "WikiQuize/0.1 (https://wikiquize.example; dev) class-search";
+  "WikiQuiz/0.1 (https://wikiquiz.example; dev) class-search";
 
 export interface ClassCandidate {
   qid: string;

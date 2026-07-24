@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 /** PWA-first is a product decision — see docs/PROJECT.md §9. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "WikiQuize",
-    short_name: "WikiQuize",
+    name: "WikiQuiz",
+    short_name: "WikiQuiz",
     description: "Fast quiz decks built from live Wikipedia data.",
     start_url: "/",
     display: "standalone",

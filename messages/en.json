@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "WikiQuize",
+    "name": "WikiQuiz",
     "tagline": "Swipe through everything humanity knows",
     "description": "Fast quiz decks built from live Wikipedia data. Flags, arms, languages, cars — and anything the community creates."
   },
