@@ -4,6 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ICON_NAMES } from "@/components/game-icon";
 import {
   createCategoryAction,
   setTopicCategoryAction,
@@ -16,7 +17,7 @@ export interface CategoryOption {
   title: string;
 }
 
-const ICONS = ["car", "globe", "landmark", "scale", "flag", "shield", "languages", "users", "deck"];
+const ICONS = ICON_NAMES;
 
 /** Assign a dataset to a category (or clear it) right from the topics list. */
 export function CategorySelect({

@@ -119,15 +119,18 @@ export default async function AdminCategoryPage({
         )}
         {myTopics.map((t) => (
           <div key={t.id} className="glass-card flex items-center justify-between gap-3 p-3">
-            <div className="flex items-center gap-3">
+            <Link
+              href={`/admin/topics/${t.slug}`}
+              className="flex flex-1 items-center gap-3 transition-colors hover:text-accent"
+            >
               <GameIcon name={(t.sourceConfig as { icon?: string })?.icon} size={16} />
               <div>
                 <p className="font-semibold">{resolveText(t.title, "uk")}</p>
                 <p className="text-[11px] text-muted">
-                  {t.status} · ігор: {gamesByTopic.get(t.id) ?? 0}
+                  {t.status} · ігор: {gamesByTopic.get(t.id) ?? 0} · відкрити →
                 </p>
               </div>
-            </div>
+            </Link>
             <div className="flex items-center gap-2">
               <Badge variant="muted">/{t.slug}</Badge>
               {/* change/detach category */}

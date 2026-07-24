@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createDraftTopicAction, type CreateDraftResult } from "@/lib/admin/actions";
 
-const ICONS = ["car", "globe", "landmark", "scale", "flag", "shield", "languages", "users", "deck"];
+import { ICON_NAMES } from "@/components/game-icon";
+
+const ICONS = ICON_NAMES;
 
 /**
  * Step 1 of the dataset-first flow: create an empty dataset (name + icon),
