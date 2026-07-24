@@ -39,6 +39,21 @@ const EXTRA_LOCALES = [
   { code: "fr", label: "Français" },
 ];
 
+/** Image props that are noise for games (maps, locators) — not proposed. */
+const NOISY_IMAGE_PROPS = new Set(["P242", "P1943", "P15", "P181", "P1846", "P1621", "P14"]);
+/** Preferred primary image by priority: flag → logo → photo → coat of arms. */
+const PRIMARY_IMAGE_ORDER = ["P41", "P154", "P18", "P94"];
+
+/** Default tick: just the ONE primary image (name is always pulled); rest opt-in. */
+function defaultPickedProps(fields: ProbeField[]): string[] {
+  const images = fields.filter((f) => f.kind === "image" && !NOISY_IMAGE_PROPS.has(f.prop));
+  for (const p of PRIMARY_IMAGE_ORDER) {
+    const hit = images.find((f) => f.prop === p);
+    if (hit) return [hit.prop];
+  }
+  return images.slice(0, 1).map((f) => f.prop);
+}
+
 function roleFromLabel(label: string, prop: string): string {
   const words = label.replace(/[^a-zA-Z0-9 ]/g, " ").trim().split(/\s+/).filter(Boolean);
   let role = words
@@ -266,8 +281,9 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
       setProbe(r);
       setTotal(r.total ?? null);
       if (r.ok && r.fields) {
-        // default: only image fields (name is always pulled); rest is admin's choice
-        setPicked(new Set(r.fields.filter((f) => f.kind === "image").map((f) => f.prop)));
+        // default: name (always pulled) + the ONE primary image; rest is opt-in.
+        // Noisy map/locator images aren't proposed at all.
+        setPicked(new Set(defaultPickedProps(r.fields)));
       }
     });
 
@@ -314,7 +330,9 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
       if (r.ok) setSaved(true); // switches to the batched import runner below
     });
 
-  const fields = probe?.ok ? (probe.fields ?? []) : null;
+  const fields = probe?.ok
+    ? (probe.fields ?? []).filter((f) => !NOISY_IMAGE_PROPS.has(f.prop))
+    : null;
 
   return (
     <div className="glass-card flex flex-col gap-3 p-4">

@@ -297,6 +297,8 @@ export interface CatalogEntry {
   slug: string;
   title: LocalizedText;
   icon?: string;
+  /** category cover image (from an item), shown instead of the icon */
+  image?: string;
   gamesCount: number;
   kind: "category" | "topic";
 }
@@ -314,6 +316,7 @@ export async function listCategories(): Promise<CatalogEntry[]> {
           slug: categories.slug,
           title: categories.title,
           icon: categories.icon,
+          image: categories.image,
           sortOrder: categories.sortOrder,
           gamesCount: sql<number>`count(${games.id})::int`,
         })
@@ -343,6 +346,7 @@ export async function listCategories(): Promise<CatalogEntry[]> {
           slug: c.slug,
           title: c.title,
           icon: c.icon ?? undefined,
+          image: c.image ?? undefined,
           gamesCount: c.gamesCount,
           kind: "category" as const,
         })),
@@ -366,6 +370,7 @@ export const PAGE_SIZE = 10;
 interface CatalogPage {
   title: LocalizedText;
   icon?: string;
+  image?: string;
   page: number;
   hasNext: boolean;
   items: {
@@ -394,7 +399,7 @@ export async function loadCategoryPage(slug: string, page = 1): Promise<CatalogP
 
   // 1) category slug → games across all its published datasets
   const [cat] = await db
-    .select({ id: categories.id, title: categories.title, icon: categories.icon })
+    .select({ id: categories.id, title: categories.title, icon: categories.icon, image: categories.image })
     .from(categories)
     .where(eq(categories.slug, slug))
     .limit(1);
@@ -416,6 +421,7 @@ export async function loadCategoryPage(slug: string, page = 1): Promise<CatalogP
     return {
       title: cat.title,
       icon: cat.icon ?? undefined,
+      image: cat.image ?? undefined,
       page: p,
       hasNext: rows.length > PAGE_SIZE,
       items: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, config: parseConfig(r.config) })),

@@ -23,7 +23,7 @@ export function LevelMap({ slug, title, icon, levels }: Props) {
 
   return (
     <>
-      <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-5 py-5">
         <div className="flex items-center gap-3">
           <GameIcon name={icon} size={28} />
           <div>

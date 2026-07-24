@@ -53,7 +53,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const statByUser = new Map(statRows.map((s) => [s.userId, s]));
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-5 py-4">
       <Breadcrumbs items={[{ href: "/team", label: "Команди" }, { label: team.name }]} />
 
       <div className="flex flex-wrap items-start justify-between gap-3">

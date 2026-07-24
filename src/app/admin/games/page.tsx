@@ -1,25 +1,63 @@
-import Link from "next/link";
-import { desc } from "drizzle-orm";
-import { Gamepad2, Play } from "lucide-react";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { Gamepad2 } from "lucide-react";
 import { db } from "@/db";
-import { games } from "@/db/schema";
-import { resolveText } from "@/i18n/locales";
-import { setGameStatusAction } from "@/lib/admin/actions";
-import { ActionButton } from "@/components/admin/action-button";
-import { GameEditor } from "@/components/admin/game-editor";
-import { GameIcon } from "@/components/game-icon";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { games, topics } from "@/db/schema";
+import { GameAdminCard } from "@/components/admin/game-admin-card";
+import { GamesFilter } from "@/components/admin/games-filter";
+import { Pagination } from "@/components/pagination";
 
 export const dynamic = "force-dynamic";
+const PAGE = 15;
 
-/** Games: publish / unpublish, preview (works for unlisted too). */
-export default async function AdminGamesPage() {
+/** Games: filter/sort/search + paginated; publish, preview, edit. */
+export default async function AdminGamesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; status?: string; sort?: string; q?: string }>;
+}) {
+  const sp = await searchParams;
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  const status = sp.status ?? "all";
+  const sort = sp.sort ?? "new";
+  const q = (sp.q ?? "").trim();
+
+  const conds = [];
+  if (["published", "unlisted", "blocked", "draft"].includes(status))
+    conds.push(sql`${games.status} = ${status}`);
+  if (q)
+    conds.push(
+      sql`(${games.slug} ILIKE ${`%${q}%`} OR ${games.title}->>'uk' ILIKE ${`%${q}%`} OR ${games.title}->>'en' ILIKE ${`%${q}%`})`,
+    );
+  const where = conds.length ? and(...conds) : undefined;
+  const order =
+    sort === "plays"
+      ? desc(games.playsCount)
+      : sort === "title"
+        ? asc(sql`${games.title}->>'uk'`)
+        : sort === "status"
+          ? asc(games.status)
+          : desc(games.createdAt);
+
   const gameRows = await db
-    .select()
+    .select({ game: games, fieldSchema: topics.fieldSchema })
     .from(games)
-    .orderBy(desc(games.createdAt))
+    .innerJoin(topics, eq(topics.id, games.topicId))
+    .where(where)
+    .orderBy(order)
+    .limit(PAGE + 1)
+    .offset((page - 1) * PAGE)
     .catch(() => []);
+  const hasNext = gameRows.length > PAGE;
+  const rows = gameRows.slice(0, PAGE);
+
+  const makeHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (status !== "all") params.set("status", status);
+    if (sort !== "new") params.set("sort", sort);
+    if (q) params.set("q", q);
+    if (p > 1) params.set("page", String(p));
+    return `/admin/games${params.toString() ? `?${params.toString()}` : ""}`;
+  };
 
   return (
     <>
@@ -27,74 +65,27 @@ export default async function AdminGamesPage() {
         <Gamepad2 size={20} /> Ігри
       </h1>
 
-      {gameRows.length === 0 && (
+      <GamesFilter status={status} sort={sort} q={q} />
+
+      {rows.length === 0 && (
         <p className="text-sm text-muted">
-          Ігри створюються після імпорту теми (як unlisted). Опублікуй їх тут кнопкою.
+          {q || status !== "all"
+            ? "Нічого не знайдено за цим фільтром."
+            : "Ігри створюються після імпорту теми (як unlisted). Опублікуй їх тут кнопкою."}
         </p>
       )}
 
       <section className="flex flex-col gap-3">
-        {gameRows.map((g) => {
-          const cfg = (g.config ?? {}) as {
-            levels?: number;
-            perLevel?: number;
-            deckSize?: number;
-            itemsCount?: number;
-          };
-          return (
-            <div key={g.id} className="glass-card flex flex-col gap-3 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <GameIcon name={(g.style as { icon?: string })?.icon} size={20} className="h-9 w-9" />
-                  <div>
-                    <p className="font-semibold">{resolveText(g.title, "uk")}</p>
-                    <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                      <Badge
-                        variant={
-                          g.status === "published"
-                            ? "success"
-                            : g.status === "unlisted"
-                              ? "muted"
-                              : "danger"
-                        }
-                      >
-                        {g.status}
-                      </Badge>
-                      /{g.slug} · рівнів: {cfg.levels ?? 1} (по {cfg.perLevel ?? 20})
-                      {cfg.itemsCount != null && ` · айтемів: ${cfg.itemsCount}`} · зіграно:{" "}
-                      {g.playsCount}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button asChild size="sm" variant="ghost" title="Прев'ю (працює і для unlisted)">
-                    <Link href={`/play/${g.slug}`}>
-                      <Play size={13} /> Грати
-                    </Link>
-                  </Button>
-                  <ActionButton
-                    variant="ghost"
-                    label={g.status === "published" ? "Зняти" : "Опублікувати"}
-                    action={setGameStatusAction.bind(
-                      null,
-                      g.id,
-                      g.status === "published" ? "unlisted" : "published",
-                    )}
-                  />
-                </div>
-              </div>
-              <GameEditor
-                gameId={g.id}
-                titleEn={(g.title as { en?: string }).en ?? ""}
-                titleUk={(g.title as { uk?: string }).uk ?? ""}
-                deckSize={cfg.deckSize ?? 10}
-                perLevel={cfg.perLevel ?? 20}
-                itemsCount={cfg.itemsCount}
-              />
-            </div>
-          );
-        })}
+        {rows.map((row) => (
+          <GameAdminCard
+            key={row.game.id}
+            game={row.game}
+            fieldSchema={(row.fieldSchema ?? []) as { role: string; kind: string }[]}
+          />
+        ))}
       </section>
+
+      <Pagination page={page} hasNext={hasNext} makeHref={makeHref} />
     </>
   );
 }

@@ -25,6 +25,11 @@ export interface GameProposal {
   /** for ref games: the sibling dataset the references resolve to */
   linkToSlug?: string;
   linkToTitle?: string;
+  /** which field is the question visual, and how many items actually have it */
+  questionRole?: string;
+  questionCoverage?: number;
+  /** for ref games: share of references that carry an image (flag/logo) */
+  answerCoverage?: number;
 }
 
 const cfgRole = (cfg: Record<string, unknown>, key: string) =>
@@ -57,6 +62,31 @@ export async function proposeGamesForTopic(
           return v != null && (!Array.isArray(v) || v.length > 0);
         }).length
       : entities.length;
+
+  // asset coverage: how "visual" a proposed game actually is
+  const imgCoverage = (role?: string) => {
+    if (!role || entities.length === 0) return undefined;
+    const withVal = entities.filter(
+      (e) => (e.values as Record<string, unknown>)[role] != null,
+    ).length;
+    return withVal / entities.length;
+  };
+  const refImgCoverage = (role?: string) => {
+    if (!role) return undefined;
+    let total = 0;
+    let withImg = 0;
+    for (const e of entities) {
+      const v = (e.values as Record<string, unknown>)[role];
+      if (!Array.isArray(v)) continue;
+      for (const x of v) {
+        if (x && typeof x === "object" && "qid" in x) {
+          total++;
+          if ((x as { image?: string }).image) withImg++;
+        }
+      }
+    }
+    return total ? withImg / total : 0;
+  };
 
   const existing = await db
     .select({ slug: games.slug, status: games.status })
@@ -112,6 +142,10 @@ export async function proposeGamesForTopic(
   for (const g of specs) {
     const refRole = cfgRole(g.config, "refRole");
     const link = refRole ? await linkFor(refRole) : undefined;
+    const questionRole =
+      cfgRole(g.config, "answerRole") ??
+      cfgRole(g.config, "promptImageRole") ??
+      cfgRole(g.config, "imageRole");
     proposals.push({
       slug: g.slug,
       titleEn: g.title.en ?? g.slug,
@@ -125,6 +159,9 @@ export async function proposeGamesForTopic(
       linkToTitle: link
         ? (link.title[locale] ?? link.title.en ?? Object.values(link.title)[0])
         : undefined,
+      questionRole,
+      questionCoverage: imgCoverage(questionRole),
+      answerCoverage: refRole ? refImgCoverage(refRole) : undefined,
     });
   }
   return { topicTitle: topic.title, proposals };

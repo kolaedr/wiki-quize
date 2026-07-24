@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Database, FolderTree, Gamepad2, LayoutDashboard } from "lucide-react";
+import {
+  Database,
+  FolderTree,
+  Gamepad2,
+  LayoutDashboard,
+  MessageSquare,
+} from "lucide-react";
 
 const LINKS = [
   { href: "/admin", label: "Огляд", icon: LayoutDashboard, exact: true },
   { href: "/admin/categories", label: "Категорії", icon: FolderTree },
   { href: "/admin/topics", label: "Датасети", icon: Database },
   { href: "/admin/games", label: "Ігри", icon: Gamepad2 },
+  { href: "/admin/feedback", label: "Фідбек", icon: MessageSquare },
 ];
 
 /** Admin sidebar navigation — horizontal on mobile, vertical column on desktop. */

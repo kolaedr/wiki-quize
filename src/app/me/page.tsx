@@ -89,7 +89,7 @@ export default async function MePage({
 
   return (
     <>
-      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-6 overflow-y-auto px-5 py-4">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-5 py-4">
         <Breadcrumbs items={[{ label: t("auth.cabinet") }]} />
         {/* profile + totals */}
         <div className="glass-card flex flex-col gap-4 p-5">

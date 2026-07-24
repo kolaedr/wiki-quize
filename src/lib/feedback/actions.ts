@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { feedback } from "@/db/schema";
+import { getAdminSession } from "@/lib/admin/guard";
 import { getUser } from "@/lib/social/session";
 import { newCaptcha, verifyCaptcha } from "./captcha";
 
@@ -16,6 +18,26 @@ const KINDS = ["topic_request", "idea", "bug", "other"] as const;
 /** Hand the form a fresh captcha question + signed token. */
 export async function newCaptchaAction(): Promise<{ question: string; token: string }> {
   return newCaptcha();
+}
+
+/** Admin: toggle a feedback item handled/open. */
+export async function setFeedbackHandledAction(
+  id: string,
+): Promise<{ ok: boolean; message: string }> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [row] = await db
+      .select({ handled: feedback.handled })
+      .from(feedback)
+      .where(eq(feedback.id, id))
+      .limit(1);
+    if (!row) return { ok: false, message: "не знайдено" };
+    await db.update(feedback).set({ handled: !row.handled }).where(eq(feedback.id, id));
+    revalidatePath("/admin/feedback");
+    return { ok: true, message: row.handled ? "відкрито" : "позначено готовим" };
+  } catch (err) {
+    return { ok: false, message: String(err).slice(0, 160) };
+  }
 }
 
 /** Store a feedback / "I want this topic" message (captcha + honeypot guarded). */

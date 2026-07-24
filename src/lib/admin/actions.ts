@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, games, topicEntities, topics } from "@/db/schema";
 import {
@@ -21,7 +21,14 @@ import {
   type PropertyCandidate,
 } from "@/lib/ingest/probe";
 import { MIN_PUBLISHABLE_ITEMS, STARTER_GAMES, runImport } from "@/lib/ingest/run";
-import { getJob, importTick, startDefImportJob, type JobView } from "@/lib/ingest/job";
+import {
+  getJob,
+  getLatestJob,
+  importTick,
+  setJobStart,
+  startDefImportJob,
+  type JobView,
+} from "@/lib/ingest/job";
 import { getAdminSession } from "./guard";
 
 export interface ActionResult {
@@ -219,6 +226,257 @@ export async function setGameConfigAction(
     revalidatePath("/admin");
     revalidatePath("/");
     return { ok: true, message: `збережено · рівнів: ${levels} (по ${pl})` };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Field roles editable as a game's question/answer visual. */
+interface VisualPatch {
+  answerRole?: string | null;
+  promptImageRole?: string | null;
+  imageRole?: string | null;
+  valueRole?: string | null;
+}
+
+/**
+ * Set which dataset fields a game uses as its QUESTION / ANSWER visual (see
+ * docs/plan/06-game-view-model.md). Roles are validated against the dataset's
+ * own field schema; "" / null clears a role (falls back to text). This is what
+ * stops the game from guessing the visual via firstImage.
+ */
+export async function setGameVisualAction(
+  gameId: string,
+  patch: VisualPatch,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [g] = await db
+      .select({ config: games.config, topicId: games.topicId })
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1);
+    if (!g) return { ok: false, message: "гру не знайдено" };
+    const [topic] = await db
+      .select({ fieldSchema: topics.fieldSchema })
+      .from(topics)
+      .where(eq(topics.id, g.topicId))
+      .limit(1);
+    const fields = (topic?.fieldSchema ?? []) as { role: string; kind: string }[];
+    const imageRoles = new Set(fields.filter((f) => f.kind === "image").map((f) => f.role));
+    const valueRoles = new Set(
+      fields.filter((f) => f.kind === "number" || f.kind === "date").map((f) => f.role),
+    );
+    const cfg = { ...((g.config ?? {}) as Record<string, unknown>) };
+    const apply = (key: keyof VisualPatch, allowed: Set<string>) => {
+      const val = patch[key];
+      if (val === undefined) return; // not being changed
+      if (!val) {
+        delete cfg[key];
+        return;
+      }
+      if (!allowed.has(val)) throw new Error(`невідоме поле «${val}» для ${key}`);
+      cfg[key] = val;
+    };
+    apply("answerRole", imageRoles);
+    apply("promptImageRole", imageRoles);
+    apply("imageRole", imageRoles);
+    apply("valueRole", valueRoles);
+    await db.update(games).set({ config: cfg }).where(eq(games.id, gameId));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "візуал збережено" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+export interface CoverageResult {
+  ok: boolean;
+  message?: string;
+  total?: number;
+  /** which role is the question visual (answerRole / promptImageRole / imageRole) */
+  questionRole?: string;
+  /** 0..1 share of items that actually have the question visual */
+  questionCoverage?: number;
+  refRole?: string;
+  /** 0..1 share of referenced entities that carry an image (flag/logo) */
+  answerCoverage?: number;
+}
+
+/** Asset coverage for a game — how "visual" it really is (question + answers). */
+export async function getGameCoverageAction(gameId: string): Promise<CoverageResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [g] = await db
+      .select({ config: games.config, topicId: games.topicId })
+      .from(games)
+      .where(eq(games.id, gameId))
+      .limit(1);
+    if (!g) return { ok: false, message: "гру не знайдено" };
+    const cfg = (g.config ?? {}) as Record<string, string | undefined>;
+    const rows = await db
+      .select({ values: topicEntities.values })
+      .from(topicEntities)
+      .where(and(eq(topicEntities.topicId, g.topicId), eq(topicEntities.excluded, false)));
+    const total = rows.length;
+
+    const questionRole = cfg.answerRole ?? cfg.promptImageRole ?? cfg.imageRole;
+    let questionCoverage: number | undefined;
+    if (questionRole) {
+      const withVal = rows.filter(
+        (r) => (r.values as Record<string, unknown>)[questionRole] != null,
+      ).length;
+      questionCoverage = total ? withVal / total : 0;
+    }
+
+    const refRole = cfg.refRole;
+    let answerCoverage: number | undefined;
+    if (refRole) {
+      let totalRefs = 0;
+      let withImg = 0;
+      for (const r of rows) {
+        const v = (r.values as Record<string, unknown>)[refRole];
+        if (!Array.isArray(v)) continue;
+        for (const ref of v) {
+          if (ref && typeof ref === "object" && "qid" in ref) {
+            totalRefs++;
+            if ((ref as { image?: string }).image) withImg++;
+          }
+        }
+      }
+      answerCoverage = totalRefs ? withImg / totalRefs : 0;
+    }
+
+    return { ok: true, total, questionRole, questionCoverage, refRole, answerCoverage };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+export interface GameItemImage {
+  qid: string;
+  label: string;
+  imageUrl: string;
+}
+
+/** Items of a game's dataset that carry an image — to pick a cover from. */
+export async function listGameItemImagesAction(
+  gameId: string,
+): Promise<{ ok: boolean; message?: string; items?: GameItemImage[] }> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [g] = await db.select({ topicId: games.topicId }).from(games).where(eq(games.id, gameId)).limit(1);
+    if (!g) return { ok: false, message: "гру не знайдено" };
+    const rows = await db
+      .select({
+        qid: topicEntities.wikidataQid,
+        labels: topicEntities.labels,
+        imageUrl: topicEntities.imageUrl,
+      })
+      .from(topicEntities)
+      .where(
+        and(
+          eq(topicEntities.topicId, g.topicId),
+          eq(topicEntities.excluded, false),
+          isNotNull(topicEntities.imageUrl),
+        ),
+      )
+      .orderBy(desc(topicEntities.difficultyScore))
+      .limit(80);
+    const items = rows
+      .filter((r) => r.imageUrl)
+      .map((r) => {
+        const l = r.labels as Record<string, string>;
+        return { qid: r.qid, label: l.uk ?? l.en ?? r.qid, imageUrl: r.imageUrl! };
+      });
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Set (or clear) a game's cover image — shown on the catalog card. */
+export async function setGameCoverAction(
+  gameId: string,
+  cover: string | null,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [g] = await db.select({ style: games.style }).from(games).where(eq(games.id, gameId)).limit(1);
+    if (!g) return { ok: false, message: "гру не знайдено" };
+    const style = { ...((g.style ?? {}) as Record<string, unknown>) };
+    if (cover) style.cover = cover;
+    else delete style.cover;
+    await db.update(games).set({ style }).where(eq(games.id, gameId));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: cover ? "обкладинку збережено" : "обкладинку прибрано" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Items across a category's datasets that carry an image — to pick a category cover. */
+export async function listCategoryItemImagesAction(
+  categorySlug: string,
+): Promise<{ ok: boolean; message?: string; items?: GameItemImage[] }> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    const [cat] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.slug, categorySlug))
+      .limit(1);
+    if (!cat) return { ok: false, message: "категорію не знайдено" };
+    const topicRows = await db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(eq(topics.categoryId, cat.id));
+    const ids = topicRows.map((t) => t.id);
+    if (!ids.length) return { ok: true, items: [] };
+    const rows = await db
+      .select({
+        qid: topicEntities.wikidataQid,
+        labels: topicEntities.labels,
+        imageUrl: topicEntities.imageUrl,
+      })
+      .from(topicEntities)
+      .where(
+        and(
+          inArray(topicEntities.topicId, ids),
+          eq(topicEntities.excluded, false),
+          isNotNull(topicEntities.imageUrl),
+        ),
+      )
+      .orderBy(desc(topicEntities.difficultyScore))
+      .limit(80);
+    const items = rows
+      .filter((r) => r.imageUrl)
+      .map((r) => {
+        const l = r.labels as Record<string, string>;
+        return { qid: r.qid, label: l.uk ?? l.en ?? r.qid, imageUrl: r.imageUrl! };
+      });
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Set (or clear) a category's image — shown on the category card. */
+export async function setCategoryImageAction(
+  categorySlug: string,
+  image: string | null,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    await db
+      .update(categories)
+      .set({ image: image || null })
+      .where(eq(categories.slug, categorySlug));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: image ? "зображення збережено" : "зображення прибрано" };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }
@@ -452,9 +710,12 @@ export interface StartJobResult {
 }
 
 /** Start a batched import job for a configured dataset; poll with importTickAction. */
-export async function startImportJobAction(topicSlug: string): Promise<StartJobResult> {
+export async function startImportJobAction(
+  topicSlug: string,
+  fresh = false,
+): Promise<StartJobResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
-  const r = await startDefImportJob(topicSlug);
+  const r = await startDefImportJob(topicSlug, fresh);
   return "error" in r ? { ok: false, message: r.error } : { ok: true, jobId: r.jobId };
 }
 
@@ -474,6 +735,19 @@ export async function importTickAction(jobId: string): Promise<JobView> {
 export async function getJobAction(jobId: string): Promise<JobView | null> {
   if (!(await getAdminSession())) return null;
   return getJob(jobId);
+}
+
+/** The latest job for a topic — used to resume the queue after a page reload. */
+export async function getLatestJobAction(topicSlug: string): Promise<JobView | null> {
+  if (!(await getAdminSession())) return null;
+  return getLatestJob(topicSlug);
+}
+
+/** Choose which batch the queue starts from (skip completed / redo from a point). */
+export async function setJobStartAction(jobId: string, batchIndex: number): Promise<JobView> {
+  if (!(await getAdminSession()))
+    return { jobId, status: "failed", phase: "done", batchIndex: 0, totalBatches: 0, batchSizes: [], accepted: 0, done: true, message: "forbidden" };
+  return setJobStart(jobId, batchIndex);
 }
 
 /** NO-CODE builder: save a topic definition and run its first import. */

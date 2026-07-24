@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { Check, Circle, Loader2, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getJobAction, importTickAction, startImportJobAction } from "@/lib/admin/actions";
+import {
+  getJobAction,
+  getLatestJobAction,
+  importTickAction,
+  setJobStartAction,
+  startImportJobAction,
+} from "@/lib/admin/actions";
 import type { JobView } from "@/lib/ingest/job";
 
 /**
@@ -26,27 +32,51 @@ export function ImportRunner({
   const router = useRouter();
   const [view, setView] = useState<JobView | null>(null);
   const [running, setRunning] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [n, setN] = useState(1);
   const [err, setErr] = useState<string | null>(null);
   const created = useRef(false);
 
-  const createJob = useCallback(async () => {
-    setErr(null);
-    const s = await startImportJobAction(topicSlug);
-    if (!s.ok || !s.jobId) {
-      setErr(s.message ?? "не вдалося створити джоб");
-      return;
-    }
-    setView(await getJobAction(s.jobId));
-  }, [topicSlug]);
+  const createJob = useCallback(
+    async (fresh = false) => {
+      setErr(null);
+      setStarting(true);
+      try {
+        const s = await startImportJobAction(topicSlug, fresh);
+        if (!s.ok || !s.jobId) {
+          setErr(s.message ?? "не вдалося створити джоб");
+          return;
+        }
+        setView(await getJobAction(s.jobId));
+      } finally {
+        setStarting(false);
+      }
+    },
+    [topicSlug],
+  );
 
   useEffect(() => {
-    if (autoStart && !created.current) {
-      created.current = true;
-      createJob();
-    }
+    if (created.current) return;
+    let cancelled = false;
+    (async () => {
+      // resume an in-progress queue from the DB on load (shows ticked batches)
+      const latest = await getLatestJobAction(topicSlug);
+      if (cancelled || created.current) return;
+      if (latest && !latest.done) {
+        created.current = true;
+        setView(latest);
+        return;
+      }
+      if (autoStart) {
+        created.current = true;
+        createJob();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart]);
+  }, [autoStart, topicSlug]);
 
   const runBatches = async (count: number) => {
     if (!view || running || view.done) return;
@@ -55,17 +85,29 @@ export function ImportRunner({
     for (let i = 0; i < count && !v.done; i++) {
       v = await importTickAction(v.jobId);
       setView(v);
+      if (v.error) break; // a batch failed — stop; the admin can retry it
     }
     setRunning(false);
     if (v.done && v.status === "done") router.refresh();
   };
 
+  const jumpTo = async (i: number) => {
+    if (!view || running) return;
+    setView(await setJobStartAction(view.jobId, i));
+  };
+
   if (!view)
     return (
       <div className="flex flex-col items-start gap-1">
-        <Button size="sm" variant="secondary" onClick={createJob}>
-          <Play size={13} /> {label}
+        <Button size="sm" variant="secondary" onClick={() => createJob()} disabled={starting}>
+          {starting ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+          {starting ? "Готую чергу…" : label}
         </Button>
+        {starting && (
+          <span className="text-xs text-muted">
+            Тягну список айтемів з Wikidata (може зайняти до ~1½ хв на великому класі)…
+          </span>
+        )}
         {err && <span className="text-xs text-danger">{err}</span>}
       </div>
     );
@@ -81,17 +123,28 @@ export function ImportRunner({
         <span className="font-semibold text-fg">
           Черга імпорту · {totalBatches} батчів · {view.accepted} айтемів
         </span>
-        <span
-          className={
-            view.status === "failed"
-              ? "text-danger"
-              : view.status === "done"
-                ? "text-success"
-                : "text-muted"
-          }
-        >
-          {view.status}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => createJob(true)}
+            disabled={running || starting}
+            title="Почати чергу заново (з новим списком айтемів)"
+            className="text-muted transition-colors hover:text-fg disabled:opacity-40"
+          >
+            <RefreshCw size={12} />
+          </button>
+          <span
+            className={
+              view.error || view.status === "failed"
+                ? "text-danger"
+                : view.status === "done"
+                  ? "text-success"
+                  : "text-muted"
+            }
+          >
+            {view.error ? "збій батча" : view.status}
+          </span>
+        </div>
       </div>
 
       {/* progress bar */}
@@ -109,8 +162,18 @@ export function ImportRunner({
           pos += size;
           const done = i < view.batchIndex;
           const current = i === view.batchIndex && view.phase === "fetch";
+          const clickable = !running && !view.done;
           return (
-            <div key={i} className="flex items-center gap-2 border-t border-line/40 p-1.5 first:border-t-0">
+            <button
+              key={i}
+              type="button"
+              disabled={!clickable}
+              onClick={() => jumpTo(i)}
+              title={clickable ? "Почати з цього батча" : undefined}
+              className={`flex w-full items-center gap-2 border-t border-line/40 p-1.5 text-left first:border-t-0 ${
+                clickable ? "hover:bg-accent-soft/40" : ""
+              }`}
+            >
               {done ? (
                 <Check size={12} className="text-success" />
               ) : current && running ? (
@@ -121,7 +184,7 @@ export function ImportRunner({
               <span className={done ? "text-muted line-through" : current ? "text-fg" : "text-muted"}>
                 Батч {i + 1}: {size} айтемів (№{from}–{pos})
               </span>
-            </div>
+            </button>
           );
         })}
         <div className="flex items-center gap-2 border-t border-line/40 p-1.5">
@@ -136,7 +199,14 @@ export function ImportRunner({
         </div>
       </div>
 
-      {view.message && <p className="text-[11px] text-muted">{view.message}</p>}
+      {!view.done && (
+        <p className="text-[10px] text-muted">
+          Клікни батч, щоб почати з нього (пропустити пройдені або перепройти).
+        </p>
+      )}
+      {view.message && (
+        <p className={`text-[11px] ${view.error ? "text-danger" : "text-muted"}`}>{view.message}</p>
+      )}
 
       {/* controls */}
       {!view.done && (

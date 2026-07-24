@@ -39,7 +39,7 @@ export default async function TeamsPage() {
     : [];
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-5 px-5 py-4">
       <Breadcrumbs items={[{ label: "Команди" }]} />
       <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
         <Users size={22} /> Мої команди

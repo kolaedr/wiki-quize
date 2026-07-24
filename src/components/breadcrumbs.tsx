@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, Home } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 
 export interface Crumb {
   href?: string;
@@ -45,12 +45,9 @@ export function Breadcrumbs({
         className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap"
         data-scrollable
       >
-        <Link href="/" aria-label="Home" className="flex items-center transition-colors hover:text-accent">
-          <Home size={13} />
-        </Link>
         {items.map((c, i) => (
           <span key={i} className="flex items-center gap-1">
-            <ChevronRight size={12} className="shrink-0 opacity-60" />
+            {i > 0 && <ChevronRight size={12} className="shrink-0 opacity-60" />}
             {c.href ? (
               <Link href={c.href} className="transition-colors hover:text-accent">
                 {c.label}

@@ -1,4 +1,4 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { games, importJobs, topicEntities, topics } from "@/db/schema";
 import { ACTIVE_LOCALES } from "@/i18n/locales";
@@ -42,6 +42,8 @@ export interface JobView {
   accepted: number;
   done: boolean;
   message?: string;
+  /** set when a batch failed but the job is still alive — it can be retried */
+  error?: string;
 }
 
 const toView = (jobId: string, status: string, c: Cursor, message?: string): JobView => ({
@@ -56,20 +58,76 @@ const toView = (jobId: string, status: string, c: Cursor, message?: string): Job
   message,
 });
 
+/** Newest job for a topic — so a page reload shows the queue where it stopped. */
+export async function getLatestJob(topicSlug: string): Promise<JobView | null> {
+  const [topic] = await db.select({ id: topics.id }).from(topics).where(eq(topics.slug, topicSlug)).limit(1);
+  if (!topic) return null;
+  const [job] = await db
+    .select()
+    .from(importJobs)
+    .where(eq(importJobs.topicId, topic.id))
+    .orderBy(desc(importJobs.createdAt))
+    .limit(1);
+  if (!job) return null;
+  return toView(job.id, job.status, job.cursor as unknown as Cursor);
+}
+
+const failView = (jobId: string, message: string): JobView => ({
+  jobId, status: "failed", phase: "done", batchIndex: 0, totalBatches: 0, batchSizes: [], accepted: 0, done: true, message,
+});
+
+/** Move the queue's start pointer — choose which batch runs next (skip / redo). */
+export async function setJobStart(jobId: string, batchIndex: number): Promise<JobView> {
+  const [job] = await db.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
+  if (!job) return failView(jobId, "джоб не знайдено");
+  const cursor = job.cursor as unknown as Cursor;
+  const idx = Math.max(0, Math.min(Math.floor(batchIndex), cursor.batches.length));
+  const next: Cursor = {
+    ...cursor,
+    batchIndex: idx,
+    phase: idx >= cursor.batches.length ? "finalize" : "fetch",
+  };
+  // reset to running so the controls come back even if it was done/failed
+  await db
+    .update(importJobs)
+    .set({ cursor: next as unknown as object, status: "running", finishedAt: null })
+    .where(eq(importJobs.id, jobId));
+  return toView(jobId, "running", next, `старт з батча ${idx + 1}`);
+}
+
 export async function getJob(jobId: string): Promise<JobView | null> {
   const [job] = await db.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
   if (!job) return null;
   return toView(jobId, job.status, job.cursor as unknown as Cursor);
 }
 
-/** Create a job: fetch the item list once, chunk into item-count batches. */
+/**
+ * Create (or RESUME) a job. The queue lives in import_jobs.cursor, so an
+ * unfinished run — after a failed batch or a page reload — is picked up where it
+ * stopped instead of regenerating. `fresh` forces a brand-new queue.
+ */
 export async function startDefImportJob(
   topicSlug: string,
+  fresh = false,
 ): Promise<{ jobId: string } | { error: string }> {
   const [topic] = await db.select().from(topics).where(eq(topics.slug, topicSlug)).limit(1);
   if (!topic) return { error: "датасет не знайдено" };
   const def = (topic.sourceConfig as { def?: TopicDef } | null)?.def;
   if (!def) return { error: "датасет без конфігурації — спочатку налаштуй" };
+
+  // resume an unfinished queue instead of building a new one
+  if (!fresh) {
+    const [existing] = await db
+      .select()
+      .from(importJobs)
+      .where(and(eq(importJobs.topicId, topic.id), eq(importJobs.status, "running")))
+      .orderBy(desc(importJobs.createdAt))
+      .limit(1);
+    if (existing) {
+      const c = existing.cursor as unknown as Cursor;
+      if (c?.phase !== "done" && c?.batches?.length) return { jobId: existing.id };
+    }
+  }
 
   let qids: string[];
   try {
@@ -83,6 +141,7 @@ export async function startDefImportJob(
   const batches: string[][] = [];
   for (let i = 0; i < qids.length; i += BATCH_SIZE) batches.push(qids.slice(i, i + BATCH_SIZE));
 
+  // starting fresh: retire any still-running job for this topic
   await db
     .update(importJobs)
     .set({ status: "failed", finishedAt: new Date(), log: ["superseded by a new run"] })
@@ -215,6 +274,16 @@ export async function importTick(jobId: string): Promise<JobView> {
       .from(topicEntities)
       .where(and(eq(topicEntities.topicId, topic.id), eq(topicEntities.excluded, false)));
     const PER_LEVEL = 20;
+    // Preserve manual game edits on re-sync: for a game that already exists we
+    // refresh ONLY the item count + levels, keeping the admin's visual roles,
+    // deckSize and perLevel. Only brand-new games get the full auto-config.
+    const existingGames = await db
+      .select({ slug: games.slug, config: games.config })
+      .from(games)
+      .where(eq(games.topicId, topic.id));
+    const existingConfig = new Map(
+      existingGames.map((g) => [g.slug, (g.config ?? {}) as Record<string, unknown>]),
+    );
     for (const g of autoGamesFor(def)) {
       const withRole = g.countRole
         ? rowsForCount.filter((e) => {
@@ -222,25 +291,36 @@ export async function importTick(jobId: string): Promise<JobView> {
             return v != null && (!Array.isArray(v) || v.length > 0);
           }).length
         : rowsForCount.length;
-      const config = {
-        ...g.config,
-        deckSize: 10,
-        perLevel: PER_LEVEL,
-        levels: Math.max(1, Math.ceil(withRole / PER_LEVEL)),
-        itemsCount: withRole,
-      };
-      await db
-        .insert(games)
-        .values({
-          slug: g.slug,
-          topicId: topic.id,
-          mechanic: g.mechanic,
-          config,
-          style: { icon: g.icon },
-          title: g.title,
-          status: "unlisted",
-        })
-        .onConflictDoUpdate({ target: games.slug, set: { topicId: topic.id, config } });
+      const prev = existingConfig.get(g.slug);
+      if (prev) {
+        const perLevel = Number(prev.perLevel) || PER_LEVEL;
+        await db
+          .update(games)
+          .set({
+            config: { ...prev, itemsCount: withRole, levels: Math.max(1, Math.ceil(withRole / perLevel)) },
+          })
+          .where(eq(games.slug, g.slug));
+      } else {
+        const config = {
+          ...g.config,
+          deckSize: 10,
+          perLevel: PER_LEVEL,
+          levels: Math.max(1, Math.ceil(withRole / PER_LEVEL)),
+          itemsCount: withRole,
+        };
+        await db
+          .insert(games)
+          .values({
+            slug: g.slug,
+            topicId: topic.id,
+            mechanic: g.mechanic,
+            config,
+            style: { icon: g.icon },
+            title: g.title,
+            status: "unlisted",
+          })
+          .onConflictDoNothing();
+      }
     }
 
     await db
@@ -259,10 +339,17 @@ export async function importTick(jobId: string): Promise<JobView> {
 
     return toView(jobId, "done", doneCursor, `готово: ${cursor.accepted} айтемів`);
   } catch (err) {
+    const msg = String(err).slice(0, 200);
+    // KEEP the job alive at the same batch so it can be retried — don't throw
+    // away the queue. The cursor wasn't advanced (the failing step ran before
+    // its write), so re-running repeats exactly the batch that failed.
     await db
       .update(importJobs)
-      .set({ status: "failed", finishedAt: new Date(), log: sql`${JSON.stringify([String(err)])}::jsonb` })
+      .set({ log: sql`${JSON.stringify([msg])}::jsonb` })
       .where(eq(importJobs.id, jobId));
-    return toView(jobId, "failed", cursor, String(err).slice(0, 200));
+    return {
+      ...toView(jobId, "running", cursor, `батч впав: ${msg} — натисни «1 батч», щоб повторити`),
+      error: msg,
+    };
   }
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq, isNull, ne, or, sql } from "drizzle-orm";
-import { ArrowLeft, ChevronRight, Database, FolderTree } from "lucide-react";
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { ArrowLeft, ChevronRight, Database, FolderTree, Gamepad2 } from "lucide-react";
 import { db } from "@/db";
 import { categories, games, topics } from "@/db/schema";
 import { GameIcon } from "@/components/game-icon";
@@ -15,8 +15,14 @@ import {
 } from "@/components/admin/category-controls";
 import { ActionButton } from "@/components/admin/action-button";
 import { DraftDatasetForm } from "@/components/admin/draft-dataset-form";
+import { GameAdminCard } from "@/components/admin/game-admin-card";
+import { ItemImagePicker } from "@/components/admin/item-image-picker";
 import { Badge } from "@/components/ui/badge";
-import { deleteCategoryAction } from "@/lib/admin/actions";
+import {
+  deleteCategoryAction,
+  listCategoryItemImagesAction,
+  setCategoryImageAction,
+} from "@/lib/admin/actions";
 import { resolveText } from "@/i18n/locales";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +60,17 @@ export default async function AdminCategoryPage({
   }));
   const children = allCats.filter((c) => c.parentId === cat.id);
 
+  // games across all datasets of this category (full editor card, like /admin/games)
+  const topicIds = myTopics.map((t) => t.id);
+  const catGames = topicIds.length
+    ? await db
+        .select({ game: games, fieldSchema: topics.fieldSchema })
+        .from(games)
+        .innerJoin(topics, eq(topics.id, games.topicId))
+        .where(inArray(games.topicId, topicIds))
+        .orderBy(desc(games.playsCount), games.slug)
+    : [];
+
   return (
     <>
       <div className="flex items-center justify-between gap-3">
@@ -85,6 +102,15 @@ export default async function AdminCategoryPage({
           />
         </div>
       </div>
+
+      {/* category image, picked from items across its datasets */}
+      <ItemImagePicker
+        label="Зображення категорії"
+        hint="Показується на картці категорії в каталозі (замість іконки)."
+        initial={cat.image ?? undefined}
+        load={listCategoryItemImagesAction.bind(null, cat.slug)}
+        save={setCategoryImageAction.bind(null, cat.slug)}
+      />
 
       {/* scrape helpers stored on the category */}
       {(() => {
@@ -167,6 +193,23 @@ export default async function AdminCategoryPage({
         <TogglePanel label="Додати датасет (новий, з Wikidata)">
           <DraftDatasetForm categoryId={cat.id} />
         </TogglePanel>
+      </section>
+
+      {/* games across this category's datasets */}
+      <section className="flex flex-col gap-2">
+        <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
+          <Gamepad2 size={14} /> Ігри категорії ({catGames.length})
+        </h2>
+        {catGames.length === 0 && (
+          <p className="text-sm text-muted">Ще немає ігор у датасетах цієї категорії.</p>
+        )}
+        {catGames.map((row) => (
+          <GameAdminCard
+            key={row.game.id}
+            game={row.game}
+            fieldSchema={(row.fieldSchema ?? []) as { role: string; kind: string }[]}
+          />
+        ))}
       </section>
     </>
   );

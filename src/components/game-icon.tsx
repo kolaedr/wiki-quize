@@ -137,15 +137,18 @@ export function GameIcon({
   name,
   size = 26,
   className = "",
+  box = "h-12 w-12",
 }: {
   name?: string;
   size?: number;
   className?: string;
+  /** container size (override for bigger catalog tiles) */
+  box?: string;
 }) {
   const Icon = (name && ICONS[name]) || SquareStack;
   return (
     <span
-      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent ${className}`}
+      className={`flex ${box} shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent ${className}`}
     >
       <Icon size={size} />
     </span>

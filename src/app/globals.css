@@ -64,7 +64,7 @@
 
 html,
 body {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
@@ -78,12 +78,21 @@ body {
 /* The game screen locks to the visual viewport; scrolling exists
    only inside explicitly scrollable regions (catalog, settings). */
 .app-shell {
-  height: 100dvh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* While a game screen is mounted (useGameScrollLock), lock to one viewport —
+   content pages keep normal document scroll. */
+body.game-active {
+  overflow: hidden;
+}
+body.game-active .app-shell {
+  height: 100dvh;
+  overflow: hidden;
 }
 
 /* ── Mystic backdrop: aurora + faint stars ──────────────────── */

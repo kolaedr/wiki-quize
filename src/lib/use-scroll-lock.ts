@@ -25,6 +25,8 @@ export function useGameScrollLock() {
     body.style.position = "fixed";
     body.style.width = "100%";
     body.style.height = "100%";
+    // flips the app-shell into fixed-viewport mode (see globals.css)
+    body.classList.add("game-active");
 
     const prevent = (e: TouchEvent) => {
       // allow multi-touch (pinch handled by viewport) and opted-in scrollables
@@ -40,6 +42,7 @@ export function useGameScrollLock() {
       body.style.position = prev.bodyPosition;
       body.style.width = prev.bodyWidth;
       body.style.height = prev.bodyHeight;
+      body.classList.remove("game-active");
       document.removeEventListener("touchmove", prevent);
     };
   }, []);

@@ -17,6 +17,17 @@ export interface ProposalView {
   existingStatus?: string;
   linkToSlug?: string;
   linkToTitle?: string;
+  questionRole?: string;
+  questionCoverage?: number;
+  answerCoverage?: number;
+}
+
+function pct(v?: number) {
+  return v == null ? null : Math.round(v * 100);
+}
+function tone(v?: number) {
+  const p = pct(v);
+  return p == null ? "text-muted" : p >= 80 ? "text-success" : p >= 50 ? "text-amber-500" : "text-danger";
 }
 
 const MIN_PUBLISHABLE = 8;
@@ -87,6 +98,26 @@ export function GameComposer({
                     </span>
                   )}
                 </div>
+                {/* asset coverage — how visual this game really is */}
+                {(r.questionCoverage != null || r.answerCoverage != null) && (
+                  <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                    {r.questionCoverage != null && (
+                      <span className={tone(r.questionCoverage)}>
+                        питання{r.questionRole ? ` (${r.questionRole})` : ""}:{" "}
+                        <span className="font-semibold">{pct(r.questionCoverage)}%</span>
+                      </span>
+                    )}
+                    {r.answerCoverage != null && (
+                      <span className={tone(r.answerCoverage)}>
+                        відповіді (картинки):{" "}
+                        <span className="font-semibold">{pct(r.answerCoverage)}%</span>
+                      </span>
+                    )}
+                    {pct(r.questionCoverage) != null && pct(r.questionCoverage)! < 50 && (
+                      <span className="text-muted">— фактично текстова, пересинхрони датасет</span>
+                    )}
+                  </div>
+                )}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Input
                     className="h-9"

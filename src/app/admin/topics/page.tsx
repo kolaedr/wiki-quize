@@ -9,6 +9,7 @@ import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
 import { CategorySelect } from "@/components/admin/category-controls";
 import { DraftDatasetForm } from "@/components/admin/draft-dataset-form";
+import { ImportRunner } from "@/components/admin/import-runner";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,11 @@ export default async function AdminTopicsPage() {
               }
             | null
             | undefined;
+          // builder (def) datasets sync via the CHUNKED runner (25-item batches,
+          // never hangs); only legacy presets use the single-request path.
+          const isDef = !!(
+            topic?.sourceConfig as { def?: { fields?: unknown[] } } | null
+          )?.def?.fields?.length;
           return (
             <div key={slug} className="glass-card flex flex-col gap-2 p-4">
               <div className="flex items-center justify-between gap-3">
@@ -101,10 +107,14 @@ export default async function AdminTopicsPage() {
                       </Link>
                     </Button>
                   )}
-                  <ActionButton
-                    label={topic ? "Синхронізувати" : "Імпортувати"}
-                    action={importPresetAction.bind(null, importKey)}
-                  />
+                  {topic && isDef ? (
+                    <ImportRunner topicSlug={slug} label="Синхронізувати" />
+                  ) : (
+                    <ActionButton
+                      label={topic ? "Синхронізувати" : "Імпортувати"}
+                      action={importPresetAction.bind(null, importKey)}
+                    />
+                  )}
                   {topic && (
                     <ActionButton
                       variant="ghost"

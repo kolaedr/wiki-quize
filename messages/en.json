@@ -9,6 +9,11 @@
     "tryDemo": "Try the demo deck",
     "catalog": "Catalog",
     "categories": "Categories",
+    "allCategories": "All categories",
+    "games": "Games",
+    "comingSoon": "Coming soon",
+    "searchPlaceholder": "Search games and categories…",
+    "nothingFound": "Nothing found",
     "gamesCount": "{count} games",
     "daily": "Daily deck",
     "heroPlayTitle": "Just play — no sign-up",
@@ -114,5 +119,18 @@
     "challengeTitle": "Challenge sent!",
     "challengeHint": "Have your opponent scan the code or open the link",
     "challengeShare": "Quiz challenge on WiQus!"
+  },
+  "feedback": {
+    "want": "Suggest a topic",
+    "hint": "Missing a topic or game? Tell us — we'll add it in one of the next ones.",
+    "kindTopic": "Topic",
+    "kindIdea": "Idea",
+    "kindBug": "Bug",
+    "placeholderTopic": "e.g. “planes”, “dinosaurs”, “capitals of Europe”…",
+    "placeholderOther": "Describe briefly…",
+    "contact": "Contact — nickname / email / social (optional)",
+    "captchaQ": "What is {q}?",
+    "send": "Send",
+    "thanks": "Thanks! Noted — I'll see what to add next."
   }
 }

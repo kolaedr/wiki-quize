@@ -25,6 +25,21 @@ export async function generateMetadata(): Promise<Metadata> {
       ],
       apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
     },
+    // link previews in messengers / social (og:image pulls the app icon)
+    openGraph: {
+      type: "website",
+      siteName: t("name"),
+      title: t("name"),
+      description: t("description"),
+      url: "/",
+      images: [{ url: "/icon-512.png", width: 512, height: 512, alt: t("name") }],
+    },
+    twitter: {
+      card: "summary",
+      title: t("name"),
+      description: t("description"),
+      images: ["/icon-512.png"],
+    },
   };
 }
 

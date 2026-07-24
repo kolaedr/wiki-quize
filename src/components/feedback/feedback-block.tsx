@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Check, Loader2, MessageSquarePlus, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { newCaptchaAction, submitFeedbackAction } from "@/lib/feedback/actions";
 
 const KINDS = [
-  { value: "topic_request", label: "Хочу тему" },
-  { value: "idea", label: "Ідея" },
-  { value: "bug", label: "Баг" },
+  { value: "topic_request", key: "kindTopic" },
+  { value: "idea", key: "kindIdea" },
+  { value: "bug", key: "kindBug" },
 ] as const;
 
 /**
@@ -18,6 +19,7 @@ const KINDS = [
  * by a stateless math captcha + a honeypot against spam.
  */
 export function FeedbackBlock() {
+  const t = useTranslations("feedback");
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<string>("topic_request");
   const [message, setMessage] = useState("");
@@ -65,11 +67,9 @@ export function FeedbackBlock() {
           className="w-full sm:w-auto"
           onClick={() => setOpen(true)}
         >
-          <MessageSquarePlus size={16} /> Хочу тему
+          <MessageSquarePlus size={16} /> {t("want")}
         </Button>
-        <span className="hidden text-sm text-muted sm:inline">
-          Не вистачає якоїсь теми чи гри? Напиши — і я додам її однією з наступних.
-        </span>
+        <span className="hidden text-sm text-muted sm:inline">{t("hint")}</span>
       </div>
     );
   }
@@ -79,11 +79,9 @@ export function FeedbackBlock() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-display flex items-center gap-2 font-semibold">
-            <MessageSquarePlus size={18} className="text-accent" /> Хочу тему
+            <MessageSquarePlus size={18} className="text-accent" /> {t("want")}
           </h2>
-          <p className="text-xs leading-5 text-muted">
-            Не вистачає якоїсь теми чи гри? Напиши — і я додам її однією з наступних.
-          </p>
+          <p className="text-xs leading-5 text-muted">{t("hint")}</p>
         </div>
         {!done && (
           <button
@@ -99,7 +97,7 @@ export function FeedbackBlock() {
 
       {done ? (
         <p className="flex items-center gap-2 text-sm text-success">
-          <Check size={16} /> Дякую! Записав — гляну, що можна спарсити наступним.
+          <Check size={16} /> {t("thanks")}
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">
@@ -116,7 +114,7 @@ export function FeedbackBlock() {
                     : "bg-accent-soft text-accent hover:bg-accent-soft/70"
                 }`}
               >
-                {k.label}
+                {t(k.key)}
               </button>
             ))}
           </div>
@@ -127,11 +125,7 @@ export function FeedbackBlock() {
             rows={2}
             maxLength={1000}
             autoFocus
-            placeholder={
-              kind === "topic_request"
-                ? "Напр. «літаки», «динозаври», «столиці Європи»…"
-                : "Опиши коротко…"
-            }
+            placeholder={kind === "topic_request" ? t("placeholderTopic") : t("placeholderOther")}
             className="w-full resize-y rounded-xl border border-line/60 bg-transparent p-3 text-sm outline-none focus:border-accent"
           />
 
@@ -139,7 +133,7 @@ export function FeedbackBlock() {
             className="h-9"
             value={contact}
             onChange={(e) => setContact(e.target.value)}
-            placeholder="Звʼязок — нік / пошта / соцмережа (необовʼязково)"
+            placeholder={t("contact")}
           />
 
           {/* honeypot — visually hidden, must stay empty */}
@@ -156,8 +150,7 @@ export function FeedbackBlock() {
           {/* micro-captcha + submit */}
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-xs text-muted">
-              Скільки буде{" "}
-              <span className="font-semibold text-fg">{captcha?.question ?? "…"}</span>?
+              {t("captchaQ", { q: captcha?.question ?? "…" })}
               <Input
                 inputMode="numeric"
                 className="h-9 w-16"
@@ -173,7 +166,7 @@ export function FeedbackBlock() {
               onClick={submit}
             >
               {pending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-              Надіслати
+              {t("send")}
             </Button>
           </div>
           {error && <p className="text-xs text-danger">{error}</p>}
