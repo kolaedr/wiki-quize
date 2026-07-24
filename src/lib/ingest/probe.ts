@@ -1,9 +1,11 @@
 import { commonsThumb, qidFromUri, sparqlQuery } from "@/lib/wikidata/sparql";
-import type { TopicFieldDef } from "./def";
+import { filterClauses, type TopicFieldDef } from "./def";
+
+export type Filter = { prop: string; valueQid: string };
 
 const SEARCH_UA =
   process.env.WIKIMEDIA_UA ??
-  "WikiQuiz/0.1 (https://wikiquiz.example; dev) class-search";
+  "WikiQuize/0.1 (https://wikiquize.example; dev) class-search";
 
 export interface ClassCandidate {
   qid: string;
@@ -44,6 +46,47 @@ export async function searchClasses(query: string): Promise<ClassCandidate[]> {
   return (json.search ?? [])
     .filter((s) => /^Q\d+$/.test(s.id))
     .map((s) => ({ qid: s.id, label: s.label ?? s.id, description: s.description }));
+}
+
+export interface PropertyCandidate {
+  /** e.g. "P27" */
+  pid: string;
+  label: string;
+  description?: string;
+}
+
+/**
+ * Property search by WORD for the optional narrowing filters: "citizenship" →
+ * P27, "occupation" → P106. wbsearchentities with type=property. The admin then
+ * searches the VALUE with searchClasses ("Ukraine" → Q212).
+ */
+export async function searchProperties(query: string): Promise<PropertyCandidate[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const lang = /[Ѐ-ӿ]/.test(q) ? "uk" : "en";
+  const url = new URL("https://www.wikidata.org/w/api.php");
+  url.search = new URLSearchParams({
+    action: "wbsearchentities",
+    search: q,
+    language: lang,
+    uselang: lang,
+    type: "property",
+    limit: "10",
+    format: "json",
+  }).toString();
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": SEARCH_UA, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`wbsearchentities ${res.status}`);
+  const json = (await res.json()) as {
+    search?: { id: string; label?: string; description?: string }[];
+  };
+  return (json.search ?? [])
+    .filter((s) => /^P\d+$/.test(s.id))
+    .map((s) => ({ pid: s.id, label: s.label ?? s.id, description: s.description }));
 }
 
 /**
@@ -102,10 +145,12 @@ export function countAtThreshold(
 export async function countForClass(
   classQids: string[],
   sitelinksMin: number,
+  filters?: Filter[],
 ): Promise<number> {
   const rows = await sparqlQuery(`
 SELECT (COUNT(DISTINCT ?item) AS ?n) WHERE {
   ${classUnion(classQids)}
+  ${filterClauses(filters)}
   ?item wikibase:sitelinks ?sl .
   FILTER(?sl >= ${Math.max(0, Math.floor(sitelinksMin))})
 }`);
@@ -234,11 +279,16 @@ LIMIT 500`);
  * lacks still shows up. Generic — no per-class special-casing. Image fields
  * carry a thumbnail; `coverage` = share of sampled items that had the field.
  */
-export async function discoverFields(classQids: string[]): Promise<DiscoveredFields> {
+export async function discoverFields(
+  classQids: string[],
+  filters?: Filter[],
+): Promise<DiscoveredFields> {
   const N = 3;
+  // Sample the top entities WITHIN the filtered set, so previews/fields reflect
+  // what the import will actually pull (e.g. Ukrainian humans, not all humans).
   const top = await sparqlQuery(`
 SELECT ?item ?itemLabel WHERE {
-  { SELECT ?item ?sl WHERE { ${classUnion(classQids)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT ${N} }
+  { SELECT ?item ?sl WHERE { ${classUnion(classQids)} ${filterClauses(filters)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT ${N} }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }`);
   const picks = top

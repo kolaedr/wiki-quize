@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { LevelMap } from "@/components/game/level-map";
+import { ChallengeButton } from "@/components/social/challenge-button";
 import { resolveText } from "@/i18n/locales";
 import { getAdminSession } from "@/lib/admin/guard";
+import { getUser } from "@/lib/social/session";
 import { loadGameMeta } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +18,7 @@ export default async function GameLevelsPage({
 }) {
   const { slug } = await params;
   const locale = await getLocale();
+  const me = await getUser();
 
   let meta;
   try {
@@ -36,6 +39,11 @@ export default async function GameLevelsPage({
             { label: resolveText(meta.title, locale) },
           ]}
         />
+        {me && (
+          <div className="mt-2 flex justify-end">
+            <ChallengeButton gameSlug={meta.slug} />
+          </div>
+        )}
       </div>
       <LevelMap
         slug={meta.slug}

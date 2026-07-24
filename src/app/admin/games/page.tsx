@@ -38,6 +38,7 @@ export default async function AdminGamesPage() {
           const cfg = (g.config ?? {}) as {
             levels?: number;
             perLevel?: number;
+            deckSize?: number;
             itemsCount?: number;
           };
           return (
@@ -86,6 +87,9 @@ export default async function AdminGamesPage() {
                 gameId={g.id}
                 titleEn={(g.title as { en?: string }).en ?? ""}
                 titleUk={(g.title as { uk?: string }).uk ?? ""}
+                deckSize={cfg.deckSize ?? 10}
+                perLevel={cfg.perLevel ?? 20}
+                itemsCount={cfg.itemsCount}
               />
             </div>
           );

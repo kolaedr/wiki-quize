@@ -237,16 +237,99 @@ export const limits = pgTable("limits", {
   value: jsonb("value").notNull(),
 });
 
-/** "Challenge a friend": same deck via token, compare results. (Stage 2) */
-export const challenges = pgTable("challenges", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  token: text("token").notNull().unique(),
-  gameId: uuid("game_id")
-    .notNull()
-    .references(() => games.id, { onDelete: "cascade" }),
-  seed: text("seed").notNull(),
-  authorSessionId: uuid("author_session_id").references(() => sessions.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+/**
+ * SOCIAL LAYER. A TEAM is a small group (family, class) a user owns; a user can
+ * belong to several. Membership, invite tokens and referral provenance live in
+ * their own tables so the graph is queryable (who invited whom, into which team).
+ */
+export const teams = pgTable(
+  "teams",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("teams_owner_idx").on(t.ownerId)],
+);
+
+export const teamRole = pgEnum("team_role", ["owner", "member"]);
+
+/** A user's membership in a team (a user may be in several teams). */
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: teamRole("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("team_members_team_user_uq").on(t.teamId, t.userId),
+    index("team_members_user_idx").on(t.userId),
+  ],
+);
+
+/** A referral/invite token for a team — shared as /join?inv=<token>. */
+export const invites = pgTable(
+  "invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    token: text("token").notNull().unique(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    inviterId: text("inviter_id").references(() => user.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("invites_team_idx").on(t.teamId)],
+);
+
+/** Provenance: who brought a user in, and into which team. One row per user. */
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    invitedByUserId: text("invited_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("referrals_inviter_idx").on(t.invitedByUserId)],
+);
+
+/**
+ * "Challenge a friend": same deck (game + seed) via token, compare results.
+ * Optionally scoped to a team, and tied to the author who threw it.
+ */
+export const challenges = pgTable(
+  "challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    token: text("token").notNull().unique(),
+    gameId: uuid("game_id")
+      .notNull()
+      .references(() => games.id, { onDelete: "cascade" }),
+    seed: text("seed").notNull(),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+    authorSessionId: uuid("author_session_id").references(() => sessions.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("challenges_team_idx").on(t.teamId)],
+);

@@ -14,10 +14,10 @@ type Mode = "signin" | "signup";
 /**
  * Kid-friendly auth: NICKNAME + password. Email is OPTIONAL (recovery /
  * parents' address). Better Auth requires an email internally, so accounts
- * without one get a synthetic `nick@users.wikiquiz.app` — sign-in accepts
+ * without one get a synthetic `nick@users.wikiquize.app` — sign-in accepts
  * either the nickname or a real email.
  */
-const SYNTH_DOMAIN = "users.wikiquiz.app";
+const SYNTH_DOMAIN = "users.wikiquize.app";
 const NICK_RE = /^[a-zA-Z0-9_-]{3,20}$/;
 
 const toEmail = (nickOrEmail: string) =>
@@ -57,7 +57,11 @@ export default function AuthPage() {
         : await authClient.signIn.email({ email: toEmail(nick), password });
     setBusy(false);
     if (res.error) setError(res.error.message ?? t("genericError"));
-    else router.push("/");
+    else {
+      // honor ?redirect= (e.g. an invite/challenge link that sent us to auth)
+      const raw = new URLSearchParams(window.location.search).get("redirect");
+      router.push(raw && raw.startsWith("/") ? raw : "/");
+    }
   };
 
   const form = (

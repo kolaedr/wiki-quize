@@ -14,8 +14,11 @@ import {
   countForClass,
   discoverFields,
   searchClasses,
+  searchProperties,
   type ClassCandidate,
+  type Filter,
   type ProbeField,
+  type PropertyCandidate,
 } from "@/lib/ingest/probe";
 import { MIN_PUBLISHABLE_ITEMS, STARTER_GAMES, runImport } from "@/lib/ingest/run";
 import { getJob, importTick, startDefImportJob, type JobView } from "@/lib/ingest/job";
@@ -186,6 +189,41 @@ export async function renameGameAction(
   }
 }
 
+/**
+ * Edit a game's deck config: cards per round (deckSize) and items per level
+ * (perLevel). `levels` is recomputed from the game's itemsCount so the level map
+ * stays consistent (a re-import overwrites itemsCount, never these two).
+ */
+export async function setGameConfigAction(
+  gameId: string,
+  deckSize: number,
+  perLevel: number,
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const ds = Math.round(Number(deckSize));
+  const pl = Math.round(Number(perLevel));
+  if (!Number.isFinite(ds) || ds < 2 || ds > 50)
+    return { ok: false, message: "Колода: 2–50 карток за раунд" };
+  if (!Number.isFinite(pl) || pl < 2 || pl > 200)
+    return { ok: false, message: "На рівень: 2–200 айтемів" };
+  try {
+    const [g] = await db.select({ config: games.config }).from(games).where(eq(games.id, gameId)).limit(1);
+    if (!g) return { ok: false, message: "гру не знайдено" };
+    const cfg = (g.config ?? {}) as Record<string, unknown> & { itemsCount?: number };
+    const items = Number(cfg.itemsCount ?? 0);
+    const levels = Math.max(1, Math.ceil((items || pl) / pl));
+    await db
+      .update(games)
+      .set({ config: { ...cfg, deckSize: ds, perLevel: pl, levels } })
+      .where(eq(games.id, gameId));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: `збережено · рівнів: ${levels} (по ${pl})` };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
 /** Delete a game (its play sessions cascade off). */
 export async function deleteGameAction(gameId: string): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
@@ -217,6 +255,28 @@ export async function searchClassesAction(query: string): Promise<ClassSearchRes
   }
 }
 
+export interface PropertySearchResult {
+  ok: boolean;
+  message?: string;
+  properties?: PropertyCandidate[];
+}
+
+/** Search Wikidata PROPERTIES by word (for the optional narrowing filters). */
+export async function searchPropertiesAction(query: string): Promise<PropertySearchResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (!query.trim()) return { ok: true, properties: [] };
+  try {
+    return { ok: true, properties: await searchProperties(query) };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/** Keep only well-formed { prop: P.., valueQid: Q.. } filters from the client. */
+function cleanFilters(filters?: Filter[]): Filter[] {
+  return (filters ?? []).filter((f) => /^P\d+$/.test(f?.prop) && /^Q\d+$/.test(f?.valueQid));
+}
+
 export interface ProbeResult {
   ok: boolean;
   message?: string;
@@ -241,14 +301,16 @@ const parseQids = (raw: string) =>
 export async function probeClassAction(
   classQidsRaw: string,
   threshold = 30,
+  filters?: Filter[],
 ): Promise<ProbeResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   const classQids = parseQids(classQidsRaw);
   if (classQids.length === 0 || classQids.some((q) => !/^Q\d+$/.test(q)))
     return { ok: false, message: "Класи мають бути виду Q3231690 (через кому)" };
+  const flt = cleanFilters(filters);
   const [countRes, fieldsRes] = await Promise.allSettled([
-    countForClass(classQids, threshold),
-    discoverFields(classQids),
+    countForClass(classQids, threshold, flt),
+    discoverFields(classQids, flt),
   ]);
   const total = countRes.status === "fulfilled" ? countRes.value : undefined;
   const disc = fieldsRes.status === "fulfilled" ? fieldsRes.value : null;
@@ -274,12 +336,16 @@ export interface CountResult {
 export async function countClassAction(
   classQidsRaw: string,
   threshold: number,
+  filters?: Filter[],
 ): Promise<CountResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   const classQids = parseQids(classQidsRaw);
   if (classQids.length === 0) return { ok: false, message: "немає класів" };
   try {
-    return { ok: true, total: await countForClass(classQids, Number(threshold) || 0) };
+    return {
+      ok: true,
+      total: await countForClass(classQids, Number(threshold) || 0, cleanFilters(filters)),
+    };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }
@@ -341,6 +407,7 @@ export async function setupTopicAction(
   sitelinksMin: number,
   fields: TopicFieldDef[],
   locales: string[] = ["en"],
+  filters?: Filter[],
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   try {
@@ -349,6 +416,7 @@ export async function setupTopicAction(
     const icon = (topic.sourceConfig as { icon?: string })?.icon ?? "deck";
     // root = "en" always; keep chosen extras after it, deduped
     const locs = ["en", ...locales.filter((l) => l && l !== "en")];
+    const flt = cleanFilters(filters);
     const def: TopicDef = {
       slug: topic.slug,
       title: topic.title as Record<string, string>,
@@ -358,6 +426,7 @@ export async function setupTopicAction(
       limit: 600,
       fields,
       locales: locs,
+      ...(flt.length ? { filters: flt } : {}),
     };
     validateDef(def);
     // SAVE config only — the heavy import runs as a batched job (startImportJobAction),

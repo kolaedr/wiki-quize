@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
-import { Crown, Gamepad2, Medal, Trophy } from "lucide-react";
+import { ChevronRight, Crown, Gamepad2, Medal, Trophy, Users } from "lucide-react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { db } from "@/db";
 import { games, sessions } from "@/db/schema";
@@ -120,6 +120,21 @@ export default async function MePage({
           </div>
         </div>
 
+        {/* teams entry */}
+        <Link
+          href="/team"
+          className="glass-card flex items-center gap-3 p-4 transition-colors hover:border-accent/60"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
+            <Users size={18} />
+          </span>
+          <span className="flex-1">
+            <span className="block text-sm font-semibold">Команди</span>
+            <span className="block text-xs text-muted">Грайте разом — рідні, друзі, клас</span>
+          </span>
+          <ChevronRight size={16} className="text-muted" />
+        </Link>
+
         <div className="grid gap-6 md:grid-cols-2">
         {/* best per game */}
         {best.length > 0 && (
@@ -144,6 +159,9 @@ export default async function MePage({
           <section className="flex flex-col gap-3">
             <h2 className="flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-wide text-muted">
               <Crown size={15} /> {t("me.leaderboard")}
+              <Link href="/leaderboard" className="ml-auto text-xs font-medium normal-case text-accent hover:underline">
+                весь рейтинг →
+              </Link>
             </h2>
             <div className="glass-card flex flex-col divide-y divide-line p-2">
               {leaderboard.map((l, i) => (

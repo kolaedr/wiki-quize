@@ -35,6 +35,20 @@ export interface TopicDef {
    * more can be added later via a re-sync. Defaults to ["en"].
    */
   locales?: string[];
+  /**
+   * OPTIONAL narrowing (AND): each item must have `prop` = `valueQid`. E.g.
+   * { prop: "P27", valueQid: "Q212" } = citizenship Ukraine, or P106=Q901 =
+   * occupation scientist. Lets a global class (human) be sliced deliberately.
+   */
+  filters?: { prop: string; valueQid: string }[];
+}
+
+/** SPARQL AND-clauses for the optional narrowing filters. */
+export function filterClauses(filters?: { prop: string; valueQid: string }[]): string {
+  return (filters ?? [])
+    .filter((f) => /^P\d+$/.test(f.prop) && /^Q\d+$/.test(f.valueQid))
+    .map((f) => `?item wdt:${f.prop} wd:${f.valueQid} .`)
+    .join("\n  ");
 }
 
 const QID_RE = /^Q\d+$/;
@@ -55,6 +69,9 @@ export function validateDef(def: TopicDef) {
   }
   if (!Number.isFinite(def.sitelinksMin) || def.sitelinksMin < 0)
     throw new Error("sitelinksMin must be >= 0");
+  for (const f of def.filters ?? [])
+    if (!/^P\d+$/.test(f.prop) || !/^Q\d+$/.test(f.valueQid))
+      throw new Error(`bad filter: ${f.prop}=${f.valueQid}`);
 }
 
 /**
@@ -116,6 +133,7 @@ ${select}
 WHERE {
   ${classUnion}
   ${excludes}
+  ${filterClauses(def.filters)}
   ?item wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${min})
   ${maxClause}
@@ -136,6 +154,7 @@ export function buildQidListQuery(def: TopicDef, sitelinksMin: number): string {
   return `
 SELECT ?item ?sitelinks WHERE {
   ${classUnion}
+  ${filterClauses(def.filters)}
   ?item wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${Math.max(0, Math.floor(sitelinksMin))})
 }

@@ -9,11 +9,17 @@ import {
   countClassAction,
   probeClassAction,
   searchClassesAction,
+  searchPropertiesAction,
   setupTopicAction,
   type ActionResult,
   type ProbeResult,
 } from "@/lib/admin/actions";
-import type { ClassCandidate, ProbeField } from "@/lib/ingest/probe";
+import type {
+  ClassCandidate,
+  Filter,
+  ProbeField,
+  PropertyCandidate,
+} from "@/lib/ingest/probe";
 import type { TopicFieldDef } from "@/lib/ingest/def";
 import { ImportRunner } from "@/components/admin/import-runner";
 
@@ -43,6 +49,14 @@ function roleFromLabel(label: string, prop: string): string {
   return role;
 }
 
+/** A narrowing filter with human labels for display (mapped to Filter on send). */
+interface ActiveFilter {
+  prop: string;
+  valueQid: string;
+  propLabel: string;
+  valueLabel: string;
+}
+
 function fieldsFrom(props: ProbeField[]): TopicFieldDef[] {
   const out: TopicFieldDef[] = [];
   for (const p of props) {
@@ -52,6 +66,159 @@ function fieldsFrom(props: ProbeField[]): TopicFieldDef[] {
     out.push({ role, kind: p.kind, prop: p.prop });
   }
   return out;
+}
+
+/**
+ * Optional narrowing filters: search a PROPERTY by word (citizenship → P27),
+ * then a VALUE by word (Ukraine → Q212). Each filter ANDs into the query, so a
+ * global class (human) can be sliced deliberately. No QIDs typed by hand.
+ */
+function FilterBuilder({
+  filters,
+  onChange,
+}: {
+  filters: ActiveFilter[];
+  onChange: (f: ActiveFilter[]) => void;
+}) {
+  const [propQuery, setPropQuery] = useState("");
+  const [propCands, setPropCands] = useState<PropertyCandidate[] | null>(null);
+  const [pickedProp, setPickedProp] = useState<PropertyCandidate | null>(null);
+  const [valQuery, setValQuery] = useState("");
+  const [valCands, setValCands] = useState<ClassCandidate[] | null>(null);
+  const [searchingProp, startProp] = useTransition();
+  const [searchingVal, startVal] = useTransition();
+
+  const runPropSearch = () =>
+    startProp(async () => {
+      const r = await searchPropertiesAction(propQuery);
+      setPropCands(r.ok ? (r.properties ?? []) : []);
+    });
+  const runValSearch = () =>
+    startVal(async () => {
+      const r = await searchClassesAction(valQuery);
+      setValCands(r.ok ? (r.classes ?? []) : []);
+    });
+
+  const addFilter = (val: ClassCandidate) => {
+    if (!pickedProp) return;
+    if (filters.some((f) => f.prop === pickedProp.pid && f.valueQid === val.qid)) return;
+    onChange([
+      ...filters,
+      { prop: pickedProp.pid, valueQid: val.qid, propLabel: pickedProp.label, valueLabel: val.label },
+    ]);
+    // reset the value step, keep the property for adding another value
+    setValQuery("");
+    setValCands(null);
+  };
+  const removeFilter = (i: number) => onChange(filters.filter((_, idx) => idx !== i));
+
+  return (
+    <details className="rounded-lg border border-line/60 p-3 text-xs">
+      <summary className="cursor-pointer font-semibold text-fg">
+        Фільтри (опційно) — звузити клас
+      </summary>
+      <p className="mt-1 text-[11px] text-muted">
+        Напр. клас «людина» + фільтр «громадянство = Україна». Кожен фільтр звужує
+        (AND). Спершу знайди властивість, потім значення.
+      </p>
+
+      {filters.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {filters.map((f, i) => (
+            <span
+              key={`${f.prop}-${f.valueQid}`}
+              className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-accent"
+            >
+              {f.propLabel} = {f.valueLabel}
+              <span className="text-[10px] opacity-70">
+                {f.prop}={f.valueQid}
+              </span>
+              <button type="button" aria-label="прибрати" onClick={() => removeFilter(i)}>
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* step 1: property */}
+      <div className="mt-3 flex items-center gap-2">
+        <Input
+          className="h-9 flex-1"
+          placeholder="Властивість: напр. «громадянство», «професія»"
+          value={propQuery}
+          onChange={(e) => setPropQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && runPropSearch()}
+        />
+        <Button size="sm" variant="ghost" disabled={searchingProp || !propQuery.trim()} onClick={runPropSearch}>
+          {searchingProp ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+        </Button>
+      </div>
+      {propCands && (
+        <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-line/50">
+          {propCands.length === 0 && <p className="p-2 text-[11px] text-muted">Нічого не знайшлось.</p>}
+          {propCands.map((p) => (
+            <button
+              key={p.pid}
+              type="button"
+              onClick={() => {
+                setPickedProp(p);
+                setPropCands(null);
+              }}
+              className="flex w-full items-center gap-2 border-t border-line/40 p-2 text-left first:border-t-0 hover:bg-accent-soft/40"
+            >
+              <span className="flex-1">
+                <span className="font-semibold">{p.label}</span>{" "}
+                <span className="text-muted">({p.pid})</span>
+                {p.description && <span className="block text-[11px] text-muted">{p.description}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* step 2: value (enabled once a property is chosen) */}
+      {pickedProp && (
+        <div className="mt-3 flex flex-col gap-1">
+          <span className="text-[11px] text-muted">
+            Властивість: <span className="font-semibold text-accent">{pickedProp.label}</span> (
+            {pickedProp.pid}) — тепер знайди значення:
+          </span>
+          <div className="flex items-center gap-2">
+            <Input
+              className="h-9 flex-1"
+              placeholder="Значення: напр. «Україна», «науковець»"
+              value={valQuery}
+              onChange={(e) => setValQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && runValSearch()}
+            />
+            <Button size="sm" variant="ghost" disabled={searchingVal || !valQuery.trim()} onClick={runValSearch}>
+              {searchingVal ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+            </Button>
+          </div>
+          {valCands && (
+            <div className="max-h-40 overflow-y-auto rounded-lg border border-line/50">
+              {valCands.length === 0 && <p className="p-2 text-[11px] text-muted">Нічого не знайшлось.</p>}
+              {valCands.map((v) => (
+                <button
+                  key={v.qid}
+                  type="button"
+                  onClick={() => addFilter(v)}
+                  className="flex w-full items-center gap-2 border-t border-line/40 p-2 text-left first:border-t-0 hover:bg-accent-soft/40"
+                >
+                  <span className="flex-1">
+                    <span className="font-semibold">{v.label}</span>{" "}
+                    <span className="text-muted">({v.qid})</span>
+                    {v.description && <span className="block text-[11px] text-muted">{v.description}</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </details>
+  );
 }
 
 /**
@@ -70,6 +237,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState<ActiveFilter[]>([]);
   const [locales, setLocales] = useState<Set<string>>(new Set(["uk"]));
   const [searching, startSearch] = useTransition();
   const [probing, startProbe] = useTransition();
@@ -80,6 +248,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
 
   const classCsv = classItems.map((c) => c.qid).join(", ");
   const classQids = classItems.map((c) => c.qid);
+  const filterPayload: Filter[] = filters.map((f) => ({ prop: f.prop, valueQid: f.valueQid }));
   const addClass = (c: ClassCandidate) =>
     setClassItems((xs) => (xs.some((x) => x.qid === c.qid) ? xs : [...xs, c]));
 
@@ -93,7 +262,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const runProbe = () =>
     startProbe(async () => {
       setResult(null);
-      const r = await probeClassAction(classCsv, threshold);
+      const r = await probeClassAction(classCsv, threshold, filterPayload);
       setProbe(r);
       setTotal(r.total ?? null);
       if (r.ok && r.fields) {
@@ -104,7 +273,7 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
 
   const recount = () =>
     startCount(async () => {
-      const r = await countClassAction(classCsv, threshold);
+      const r = await countClassAction(classCsv, threshold, filterPayload);
       if (r.ok) setTotal(r.total ?? null);
     });
 
@@ -133,7 +302,14 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const submit = () =>
     start(async () => {
       const fields = fieldsFrom((probe?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind));
-      const r = await setupTopicAction(topicSlug, classQids, threshold, fields, ["en", ...locales]);
+      const r = await setupTopicAction(
+        topicSlug,
+        classQids,
+        threshold,
+        fields,
+        ["en", ...locales],
+        filterPayload,
+      );
       setResult(r);
       if (r.ok) setSaved(true); // switches to the batched import runner below
     });
@@ -221,6 +397,9 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
           </Button>
         </div>
       </details>
+
+      {/* optional narrowing filters (e.g. citizenship = Ukraine) */}
+      <FilterBuilder filters={filters} onChange={setFilters} />
 
       <Button size="sm" className="self-start" disabled={probing || classItems.length === 0} onClick={runProbe}>
         {probing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
