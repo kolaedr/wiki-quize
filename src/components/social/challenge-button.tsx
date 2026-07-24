@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createChallengeAction } from "@/lib/social/actions";
@@ -8,6 +9,7 @@ import { ShareDialog } from "@/components/social/share-dialog";
 
 /** Throw a challenge on a game → opens a share modal (link + QR + share). */
 export function ChallengeButton({ gameSlug }: { gameSlug: string }) {
+  const t = useTranslations("social");
   const [pending, start] = useTransition();
   const [url, setUrl] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -34,16 +36,16 @@ export function ChallengeButton({ gameSlug }: { gameSlug: string }) {
     <div className="flex flex-col items-end gap-1">
       <Button size="sm" variant="glass" disabled={pending} onClick={make}>
         {pending ? <Loader2 size={14} className="animate-spin" /> : <Swords size={14} />}
-        Кинути челендж
+        {t("challengeCta")}
       </Button>
       {error && <p className="text-xs text-danger">{error}</p>}
       <ShareDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Челендж кинуто!"
+        title={t("challengeTitle")}
         url={url ?? ""}
-        hint="Хай суперник відсканує код або відкриє лінк"
-        shareText="Виклик на квіз у Wiqus!"
+        hint={t("challengeHint")}
+        shareText={t("challengeShare")}
       />
     </div>
   );

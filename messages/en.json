@@ -101,5 +101,18 @@
     "light": "Light",
     "dark": "Dark",
     "system": "System"
+  },
+  "social": {
+    "inviteCta": "Create invite link",
+    "inviteHelp": "Share the link or QR — anyone who opens it joins the team (after sign-up if they don’t have an account yet).",
+    "inviteTitle": "Team invite",
+    "inviteTitleNamed": "Invite to “{name}”",
+    "inviteHint": "Have them scan the code or open the link to join",
+    "inviteShare": "Join my team on WiQus",
+    "inviteShareNamed": "Join the “{name}” team on WiQus",
+    "challengeCta": "Throw a challenge",
+    "challengeTitle": "Challenge sent!",
+    "challengeHint": "Have your opponent scan the code or open the link",
+    "challengeShare": "Quiz challenge on WiQus!"
   }
 }
