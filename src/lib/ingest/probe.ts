@@ -169,8 +169,8 @@ export async function countForClass(
 ): Promise<number> {
   const rows = await sparqlQuery(`
 SELECT (COUNT(DISTINCT ?item) AS ?n) WHERE {
-  ${classUnion(classQids)}
   ${filterClauses(filters)}
+  ${classUnion(classQids)}
   ?item wikibase:sitelinks ?sl .
   FILTER(?sl >= ${Math.max(0, Math.floor(sitelinksMin))})
 }`);
@@ -206,8 +206,8 @@ async function facetOne(
 ): Promise<Facet | null> {
   const rows = await sparqlQuery(`
 SELECT ?v ?vLabel (COUNT(DISTINCT ?item) AS ?n) WHERE {
-  ${classUnion(classQids)}
   ${filterClauses(filters)}
+  ${classUnion(classQids)}
   ?item wikibase:sitelinks ?sl .
   FILTER(?sl >= ${Math.max(0, Math.floor(sitelinksMin))})
   ?item wdt:${fp.prop} ?v .
@@ -374,9 +374,13 @@ export async function discoverFields(
   const N = 3;
   // Sample the top entities WITHIN the filtered set, so previews/fields reflect
   // what the import will actually pull (e.g. Ukrainian humans, not all humans).
+  // filters first + a floor bounds the sort: an unfiltered class (e.g. all humans)
+  // is too big to ORDER BY unbounded, so require some notability when there's no
+  // narrowing filter; a filtered set is already small and needs no floor.
+  const floor = filters?.length ? 1 : 20;
   const top = await sparqlQuery(`
 SELECT ?item ?itemLabel WHERE {
-  { SELECT ?item ?sl WHERE { ${classUnion(classQids)} ${filterClauses(filters)} ?item wikibase:sitelinks ?sl . } ORDER BY DESC(?sl) LIMIT ${N} }
+  { SELECT ?item ?sl WHERE { ${filterClauses(filters)} ${classUnion(classQids)} ?item wikibase:sitelinks ?sl . FILTER(?sl >= ${floor}) } ORDER BY DESC(?sl) LIMIT ${N} }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }`);
   const picks = top
@@ -427,6 +431,7 @@ SELECT ?item ?itemLabel ?sl WHERE {
     SELECT DISTINCT ?item ?sl WHERE {
       ${classUnion(classQids)}
       ?item wikibase:sitelinks ?sl .
+      FILTER(?sl >= 20)
     }
     ORDER BY DESC(?sl)
     LIMIT 1

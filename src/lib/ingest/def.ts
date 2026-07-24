@@ -136,20 +136,26 @@ export function buildTopicQuery(
   const min = range?.min ?? def.sitelinksMin;
   const maxClause =
     range?.maxExclusive != null ? `FILTER(?sitelinks < ${range.maxExclusive})` : "";
+  // DIRECT P31 (not P31/P279*) so this matches the probe's estimate exactly and
+  // the optimizer can start from the narrow filter. The transitive closure over
+  // a huge root (Q5 human) is what 504s.
   const classUnion = def.classQids
-    .map((q) => `{ ?item wdt:P31/wdt:P279* wd:${q} . }`)
+    .map((q) => `{ ?item wdt:P31 wd:${q} . }`)
     .join("\n  UNION\n  ");
   const excludes = (def.excludeClassQids ?? [])
     .map((q) => `MINUS { ?item wdt:P31 wd:${q} . }`)
     .join("\n  ");
   const { labelClauses, fieldClauses, groupBy, select } = queryShape(def, locales);
 
+  // FILTERS FIRST: the narrowing filter (e.g. occupation=monarch, ~thousands) is
+  // far more selective than the class (Q5, ~11M), so binding it first keeps the
+  // optimizer off the full-class scan.
   return `
 ${select}
 WHERE {
+  ${filterClauses(def.filters)}
   ${classUnion}
   ${excludes}
-  ${filterClauses(def.filters)}
   ?item wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${min})
   ${maxClause}
@@ -164,13 +170,17 @@ LIMIT ${Math.min(def.limit || 500, 5000)}
 /** Fetch the class's item QIDs (famous first) — the list is then chunked into
  *  item-count batches for the import job. */
 export function buildQidListQuery(def: TopicDef, sitelinksMin: number): string {
+  // DIRECT P31 + narrowing FILTERS FIRST. The transitive closure P31/P279* over a
+  // huge root like Q5 (human) is what 504s on this one-shot list fetch; direct P31
+  // matches the probe and lets the optimizer start from the selective filter
+  // (occupation=monarch, ~thousands) instead of enumerating every human.
   const classUnion = def.classQids
-    .map((q) => `{ ?item wdt:P31/wdt:P279* wd:${q} . }`)
+    .map((q) => `{ ?item wdt:P31 wd:${q} . }`)
     .join("\n  UNION\n  ");
   return `
 SELECT ?item ?sitelinks WHERE {
-  ${classUnion}
   ${filterClauses(def.filters)}
+  ${classUnion}
   ?item wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${Math.max(0, Math.floor(sitelinksMin))})
 }

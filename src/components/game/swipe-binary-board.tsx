@@ -95,6 +95,10 @@ export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }:
         )}
 
         <AnimatePresence mode="wait">
+          {/* OUTER: owns enter/exit only — no style motion value, so the exit
+              (incl. the sideways fly-off) always settles and mode="wait" lets the
+              next card in. INNER owns the live drag; mixing a style motion value
+              with an exit target on the SAME x/rotate is what stalled the leave. */}
           <motion.div
             key={card.id}
             initial={{ opacity: 0, y: 30, scale: 0.95 }}
@@ -106,6 +110,9 @@ export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }:
               rotate: answered ? (s.picked === "true" ? 25 : -25) : 0,
             }}
             transition={{ duration: 0.35, ease: [0.2, 0.6, 0.4, 1] }}
+            className="absolute inset-0"
+          >
+          <motion.div
             drag={!answered}
             dragSnapToOrigin
             dragElastic={0.9}
@@ -163,6 +170,7 @@ export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }:
             >
               <Check size={13} /> {t("true")}
             </motion.span>
+          </motion.div>
           </motion.div>
         </AnimatePresence>
       </div>
