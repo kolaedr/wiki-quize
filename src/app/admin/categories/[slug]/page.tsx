@@ -66,6 +66,27 @@ export default async function AdminCategoryPage({
         {resolveText(cat.title, "uk")}
       </h1>
 
+      {/* scrape helpers stored on the category */}
+      {(() => {
+        const meta = cat.meta as { classHints?: string[]; note?: string } | null;
+        if (!meta?.classHints?.length && !meta?.note) return null;
+        return (
+          <div className="glass-card flex flex-col gap-1 p-3 text-xs">
+            {meta.classHints?.length ? (
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="text-muted">Підказки для розвідки:</span>
+                {meta.classHints.map((h) => (
+                  <span key={h} className="rounded-full bg-accent-soft px-2 py-0.5 text-accent">
+                    {h}
+                  </span>
+                ))}
+              </p>
+            ) : null}
+            {meta.note && <p className="text-[11px] text-muted">{meta.note}</p>}
+          </div>
+        );
+      })()}
+
       {/* sub-categories */}
       <section className="flex flex-col gap-2">
         <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">

@@ -31,21 +31,21 @@ export default async function Home() {
           </p>
         </div>
 
-        {/* onboarding cards */}
-        <section className="grid gap-3 sm:grid-cols-2">
-          <Link
-            href="/play"
-            className="glass-card flex flex-col gap-2 p-5 transition-all hover:border-accent active:scale-[0.99]"
-          >
-            <span className="flex items-center gap-2 font-display font-semibold">
-              <Play size={16} className="text-accent" /> {t("home.heroPlayTitle")}
-            </span>
-            <span className="text-sm leading-6 text-muted">{t("home.heroPlayText")}</span>
-            <span className="mt-1 flex items-center gap-1 text-sm font-medium text-accent">
-              {t("home.heroPlayCta")} <ChevronRight size={15} />
-            </span>
-          </Link>
-          {!session && (
+        {/* onboarding cards — only for guests; signed-in users go straight to categories */}
+        {!session && (
+          <section className="grid gap-3 sm:grid-cols-2">
+            <Link
+              href="/play"
+              className="glass-card flex flex-col gap-2 p-5 transition-all hover:border-accent active:scale-[0.99]"
+            >
+              <span className="flex items-center gap-2 font-display font-semibold">
+                <Play size={16} className="text-accent" /> {t("home.heroPlayTitle")}
+              </span>
+              <span className="text-sm leading-6 text-muted">{t("home.heroPlayText")}</span>
+              <span className="mt-1 flex items-center gap-1 text-sm font-medium text-accent">
+                {t("home.heroPlayCta")} <ChevronRight size={15} />
+              </span>
+            </Link>
             <Link
               href="/auth"
               className="glass-card flex flex-col gap-2 p-5 transition-all hover:border-accent active:scale-[0.99]"
@@ -58,8 +58,8 @@ export default async function Home() {
                 {t("home.heroJoinCta")} <ChevronRight size={15} />
               </span>
             </Link>
-          )}
-        </section>
+          </section>
+        )}
 
         {categories.length > 0 ? (
           <section className="flex flex-col gap-3">

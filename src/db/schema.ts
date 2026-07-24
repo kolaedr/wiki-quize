@@ -68,6 +68,14 @@ export const categories = pgTable(
     }),
     title: jsonb("title").$type<LocalizedText>().notNull(),
     icon: text("icon"),
+    /** cover image URL for the category card */
+    image: text("image"),
+    /**
+     * Scrape helpers so the admin doesn't start from scratch: suggested Wikidata
+     * class search words + notes for building datasets under this category.
+     * { classHints?: string[], note?: string, ... }
+     */
+    meta: jsonb("meta"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

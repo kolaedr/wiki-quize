@@ -29,6 +29,9 @@ interface Node {
   en: string;
   uk: string;
   icon: string;
+  /** scrape helpers: Wikidata class search words + optional note */
+  hints?: string[];
+  note?: string;
   children?: Node[];
 }
 
@@ -39,11 +42,11 @@ const TREE: Node[] = [
     uk: "Географія",
     icon: "globe",
     children: [
-      { slug: "countries", en: "Countries", uk: "Країни", icon: "flag" },
-      { slug: "capitals", en: "Capitals", uk: "Столиці", icon: "landmark" },
-      { slug: "cities", en: "Cities", uk: "Міста", icon: "landmark" },
-      { slug: "landmarks", en: "Landmarks", uk: "Визначні місця", icon: "landmark" },
-      { slug: "rivers-mountains", en: "Rivers & mountains", uk: "Річки й гори", icon: "globe" },
+      { slug: "countries", en: "Countries", uk: "Країни", icon: "flag", hints: ["country", "sovereign state"] },
+      { slug: "capitals", en: "Capitals", uk: "Столиці", icon: "landmark", hints: ["capital city"] },
+      { slug: "cities", en: "Cities", uk: "Міста", icon: "landmark", hints: ["city", "big city"] },
+      { slug: "landmarks", en: "Landmarks", uk: "Визначні місця", icon: "landmark", hints: ["tourist attraction", "landmark"] },
+      { slug: "rivers-mountains", en: "Rivers & mountains", uk: "Річки й гори", icon: "globe", hints: ["river", "mountain"] },
     ],
   },
   {
@@ -52,11 +55,11 @@ const TREE: Node[] = [
     uk: "Транспорт",
     icon: "car",
     children: [
-      { slug: "cars", en: "Cars", uk: "Автомобілі", icon: "car" },
-      { slug: "motorcycles", en: "Motorcycles", uk: "Мотоцикли", icon: "car" },
-      { slug: "aircraft", en: "Aircraft", uk: "Літаки", icon: "deck" },
-      { slug: "trains", en: "Trains", uk: "Потяги", icon: "deck" },
-      { slug: "ships", en: "Ships", uk: "Кораблі", icon: "deck" },
+      { slug: "cars", en: "Cars", uk: "Автомобілі", icon: "car", hints: ["automobile model", "automobile manufacturer"] },
+      { slug: "motorcycles", en: "Motorcycles", uk: "Мотоцикли", icon: "car", hints: ["motorcycle model"] },
+      { slug: "aircraft", en: "Aircraft", uk: "Літаки", icon: "deck", hints: ["airliner", "aircraft model"] },
+      { slug: "trains", en: "Trains", uk: "Потяги", icon: "deck", hints: ["locomotive class", "train"] },
+      { slug: "ships", en: "Ships", uk: "Кораблі", icon: "deck", hints: ["ship class", "ship"] },
     ],
   },
   {
@@ -65,12 +68,12 @@ const TREE: Node[] = [
     uk: "Військова справа",
     icon: "shield",
     children: [
-      { slug: "weapons", en: "Firearms", uk: "Стрілецька зброя", icon: "shield" },
-      { slug: "military-aircraft", en: "Military aircraft", uk: "Військова авіація", icon: "shield" },
-      { slug: "military-vehicles", en: "Armored vehicles", uk: "Бронетехніка", icon: "shield" },
-      { slug: "warships", en: "Warships", uk: "Військові кораблі", icon: "shield" },
-      { slug: "ranks-insignia", en: "Ranks & insignia", uk: "Звання та відзнаки", icon: "shield" },
-      { slug: "military-symbols", en: "Military symbols", uk: "Військова символіка", icon: "flag" },
+      { slug: "weapons", en: "Firearms", uk: "Стрілецька зброя", icon: "shield", hints: ["firearm"] },
+      { slug: "military-aircraft", en: "Military aircraft", uk: "Військова авіація", icon: "shield", hints: ["military aircraft"] },
+      { slug: "military-vehicles", en: "Armored vehicles", uk: "Бронетехніка", icon: "shield", hints: ["tank", "armoured fighting vehicle"] },
+      { slug: "warships", en: "Warships", uk: "Військові кораблі", icon: "shield", hints: ["warship"] },
+      { slug: "ranks-insignia", en: "Ranks & insignia", uk: "Звання та відзнаки", icon: "shield", hints: ["military rank"], note: "по країнах — опційний фільтр P17" },
+      { slug: "military-symbols", en: "Military symbols", uk: "Військова символіка", icon: "flag", hints: ["military emblem", "coat of arms"] },
     ],
   },
   {
@@ -79,10 +82,10 @@ const TREE: Node[] = [
     uk: "Історія",
     icon: "scale",
     children: [
-      { slug: "historical-events", en: "Historical events", uk: "Історичні події", icon: "scale" },
-      { slug: "wars-battles", en: "Wars & battles", uk: "Війни та битви", icon: "shield" },
-      { slug: "historical-figures", en: "Historical figures", uk: "Історичні постаті", icon: "users" },
-      { slug: "empires", en: "States & empires", uk: "Держави та імперії", icon: "flag" },
+      { slug: "historical-events", en: "Historical events", uk: "Історичні події", icon: "scale", hints: ["historical event"] },
+      { slug: "wars-battles", en: "Wars & battles", uk: "Війни та битви", icon: "shield", hints: ["battle", "war"] },
+      { slug: "historical-figures", en: "Historical figures", uk: "Історичні постаті", icon: "users", hints: ["human"], note: "Q5 завеликий — потрібен фільтр (країна P27 / професія P106)" },
+      { slug: "empires", en: "States & empires", uk: "Держави та імперії", icon: "flag", hints: ["former country", "empire"] },
     ],
   },
   {
@@ -91,10 +94,10 @@ const TREE: Node[] = [
     uk: "Наука",
     icon: "deck",
     children: [
-      { slug: "scientists", en: "Scientists", uk: "Науковці", icon: "users" },
-      { slug: "inventions", en: "Inventions", uk: "Винаходи", icon: "deck" },
-      { slug: "chemical-elements", en: "Chemical elements", uk: "Хімічні елементи", icon: "deck" },
-      { slug: "space", en: "Space", uk: "Космос", icon: "globe" },
+      { slug: "scientists", en: "Scientists", uk: "Науковці", icon: "users", hints: ["human"], note: "фільтр professia P106 = scientist" },
+      { slug: "inventions", en: "Inventions", uk: "Винаходи", icon: "deck", hints: ["invention"] },
+      { slug: "chemical-elements", en: "Chemical elements", uk: "Хімічні елементи", icon: "deck", hints: ["chemical element"] },
+      { slug: "space", en: "Space", uk: "Космос", icon: "globe", hints: ["planet", "star", "constellation"] },
     ],
   },
   {
@@ -103,11 +106,11 @@ const TREE: Node[] = [
     uk: "Природа",
     icon: "deck",
     children: [
-      { slug: "animals", en: "Animals", uk: "Тварини", icon: "deck" },
-      { slug: "birds", en: "Birds", uk: "Птахи", icon: "deck" },
-      { slug: "plants-trees", en: "Plants & trees", uk: "Рослини й дерева", icon: "deck" },
-      { slug: "fungi", en: "Fungi", uk: "Гриби", icon: "deck" },
-      { slug: "foods", en: "Foods", uk: "Продукти й страви", icon: "deck" },
+      { slug: "animals", en: "Animals", uk: "Тварини", icon: "deck", hints: ["mammal", "species"], note: "taxon Q16521 завеликий — бери конкретні класи" },
+      { slug: "birds", en: "Birds", uk: "Птахи", icon: "deck", hints: ["bird"] },
+      { slug: "plants-trees", en: "Plants & trees", uk: "Рослини й дерева", icon: "deck", hints: ["plant", "tree"] },
+      { slug: "fungi", en: "Fungi", uk: "Гриби", icon: "deck", hints: ["fungus"] },
+      { slug: "foods", en: "Foods", uk: "Продукти й страви", icon: "deck", hints: ["food", "dish"] },
     ],
   },
   {
@@ -116,9 +119,9 @@ const TREE: Node[] = [
     uk: "Медицина",
     icon: "deck",
     children: [
-      { slug: "anatomy", en: "Anatomy", uk: "Анатомія", icon: "deck" },
-      { slug: "diseases", en: "Diseases", uk: "Хвороби", icon: "deck" },
-      { slug: "medications", en: "Medications", uk: "Ліки", icon: "deck" },
+      { slug: "anatomy", en: "Anatomy", uk: "Анатомія", icon: "deck", hints: ["anatomical structure", "organ"] },
+      { slug: "diseases", en: "Diseases", uk: "Хвороби", icon: "deck", hints: ["disease"] },
+      { slug: "medications", en: "Medications", uk: "Ліки", icon: "deck", hints: ["medication"] },
     ],
   },
   {
@@ -127,11 +130,11 @@ const TREE: Node[] = [
     uk: "Культура",
     icon: "deck",
     children: [
-      { slug: "movies", en: "Movies", uk: "Фільми", icon: "deck" },
-      { slug: "music", en: "Music", uk: "Музика", icon: "deck" },
-      { slug: "video-games", en: "Video games", uk: "Відеоігри", icon: "deck" },
-      { slug: "sport", en: "Sport", uk: "Спорт", icon: "users" },
-      { slug: "art", en: "Art", uk: "Мистецтво", icon: "deck" },
+      { slug: "movies", en: "Movies", uk: "Фільми", icon: "deck", hints: ["film"] },
+      { slug: "music", en: "Music", uk: "Музика", icon: "deck", hints: ["musical group", "band"] },
+      { slug: "video-games", en: "Video games", uk: "Відеоігри", icon: "deck", hints: ["video game"] },
+      { slug: "sport", en: "Sport", uk: "Спорт", icon: "users", hints: ["sport", "association football club"] },
+      { slug: "art", en: "Art", uk: "Мистецтво", icon: "deck", hints: ["painting"] },
     ],
   },
   {
@@ -140,27 +143,25 @@ const TREE: Node[] = [
     uk: "Технології",
     icon: "deck",
     children: [
-      { slug: "companies", en: "Companies", uk: "Компанії", icon: "deck" },
-      { slug: "gadgets", en: "Gadgets", uk: "Гаджети", icon: "deck" },
-      { slug: "software", en: "Software", uk: "Програмне забезпечення", icon: "deck" },
+      { slug: "companies", en: "Companies", uk: "Компанії", icon: "deck", hints: ["business", "public company"] },
+      { slug: "gadgets", en: "Gadgets", uk: "Гаджети", icon: "deck", hints: ["smartphone model", "consumer electronics"] },
+      { slug: "software", en: "Software", uk: "Програмне забезпечення", icon: "deck", hints: ["software", "programming language"] },
     ],
   },
 ];
 
 async function upsert(node: Node, sortOrder: number, parentId: string | null): Promise<string> {
-  const values = {
-    slug: node.slug,
-    title: { en: node.en, uk: node.uk },
-    icon: node.icon,
-    sortOrder,
-    parentId,
-  };
+  const meta =
+    node.hints || node.note
+      ? { ...(node.hints ? { classHints: node.hints } : {}), ...(node.note ? { note: node.note } : {}) }
+      : null;
+  const title = { en: node.en, uk: node.uk };
   await db
     .insert(categories)
-    .values(values)
+    .values({ slug: node.slug, title, icon: node.icon, meta, sortOrder, parentId })
     .onConflictDoUpdate({
       target: categories.slug,
-      set: { title: values.title, icon: node.icon, sortOrder, parentId },
+      set: { title, icon: node.icon, meta, sortOrder, parentId },
     });
   const [row] = await db.select({ id: categories.id }).from(categories).where(eq(categories.slug, node.slug)).limit(1);
   return row!.id;
