@@ -6,10 +6,16 @@
  *
  * An entity enters the game pool only if it has labels in ALL active locales.
  */
-export const ACTIVE_LOCALES = ["en"] as const; // stage 2: +"uk"; stage 3: +"de","es","fr"
+export const ACTIVE_LOCALES = ["en", "uk"] as const; // stage 3: +"de","es","fr"
 export const DEFAULT_LOCALE = "en";
+/** Cookie used by locale switcher + getRequestConfig (no [locale] routing). */
+export const LOCALE_COOKIE = "wq-locale";
 
 export type Locale = (typeof ACTIVE_LOCALES)[number];
+
+export function isLocale(value: string | undefined | null): value is Locale {
+  return !!value && (ACTIVE_LOCALES as readonly string[]).includes(value);
+}
 
 export type LocalizedText = Partial<Record<string, string>>;
 

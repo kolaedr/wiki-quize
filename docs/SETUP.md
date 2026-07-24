@@ -25,7 +25,7 @@
 
 ```
 BETTER_AUTH_SECRET=   # openssl rand -base64 32
-BETTER_AUTH_URL=      # локально http://localhost:3000, на Vercel — прод-URL
+BETTER_AUTH_URL=      # локально http://localhost:3000, на Vercel — https://wiqus.vercel.app
 ADMIN_TASK_SECRET=    # довільний секрет для запуску імпорту даних (openssl rand -hex 16)
 ```
 

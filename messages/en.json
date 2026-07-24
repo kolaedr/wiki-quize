@@ -16,7 +16,19 @@
     "heroPlayCta": "Try a demo",
     "heroJoinTitle": "Sign up to save progress",
     "heroJoinText": "Keep your streaks — and start a team to settle who's actually the smartest.",
-    "heroJoinCta": "Create account"
+    "heroJoinCta": "Create account",
+    "installTitle": "Install as an app",
+    "installBody": "Add WikiQuiz to your home screen for a full-screen, one-tap experience — no App Store needed.",
+    "installCta": "Install",
+    "installDismiss": "Dismiss",
+    "installIosStep1": "Tap the Share button in Safari",
+    "installIosStep2": "Scroll and choose “Add to Home Screen”",
+    "installIosStep3": "Tap Add — the icon appears on your home screen",
+    "installGeneric": "In your browser menu, choose “Install app” or “Add to Home Screen”. On a phone it usually sits under Share or ⋮."
+  },
+  "footer": {
+    "portfolio": "Portfolio",
+    "language": "Language"
   },
   "me": {
     "played": "Games played",

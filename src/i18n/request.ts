@@ -1,12 +1,15 @@
+import { cookies } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
-import { DEFAULT_LOCALE } from "./locales";
+import { DEFAULT_LOCALE, isLocale, LOCALE_COOKIE } from "./locales";
 
 /**
- * next-intl without locale routing for now (EN only, stage 1).
- * Stage 2 (UA): switch to cookie/header-based locale or [locale] routing.
+ * next-intl without locale routing — locale from cookie (EN/UA).
+ * Cookie is set by LocaleSwitcher; no [locale] URL segment.
  */
 export default getRequestConfig(async () => {
-  const locale = DEFAULT_LOCALE;
+  const store = await cookies();
+  const raw = store.get(LOCALE_COOKIE)?.value;
+  const locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
 
   return {
     locale,

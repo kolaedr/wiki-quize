@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 import { SwRegister } from "@/components/sw-register";
 // Self-hosted variable fonts (no runtime Google Fonts dependency)
 import "@fontsource-variable/manrope"; // includes latin + cyrillic subsets
@@ -12,6 +13,7 @@ import "./globals.css";
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");
   return {
+    metadataBase: new URL("https://wiqus.vercel.app"),
     title: { default: t("name"), template: `%s · ${t("name")}` },
     description: t("description"),
     applicationName: t("name"),
@@ -55,11 +57,12 @@ export default async function RootLayout({
           }}
         />
         <ThemeProvider>
-          <NextIntlClientProvider messages={messages}>
+          <NextIntlClientProvider locale={locale} messages={messages}>
             <div className="mystic-bg" aria-hidden />
             <div className="app-shell">
               <SiteHeader />
               <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+              <SiteFooter />
             </div>
             <SwRegister />
           </NextIntlClientProvider>

@@ -20,7 +20,7 @@ npm run dev                 # http://localhost:3000
 |---|---|
 | `DATABASE_URL` | Vercel dashboard → Storage → Neon (pooled connection string), or neon.tech directly |
 | `BETTER_AUTH_SECRET` | `npx @better-auth/cli secret` or `openssl rand -base64 32` |
-| `BETTER_AUTH_URL` | `http://localhost:3000` locally; your prod URL on Vercel |
+| `BETTER_AUTH_URL` | `http://localhost:3000` locally; `https://wiqus.vercel.app` on Vercel prod |
 | `GOOGLE_CLIENT_ID/SECRET` | optional — Google OAuth (redirect: `{URL}/api/auth/callback/google`) |
 
 ## Scripts
