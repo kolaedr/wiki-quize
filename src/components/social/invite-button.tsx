@@ -42,7 +42,7 @@ export function InviteButton({ teamId, teamName }: { teamId: string; teamName?: 
         title={teamName ? `Запросити в «${teamName}»` : "Запрошення в команду"}
         url={url ?? ""}
         hint="Хай відсканує код або відкриє лінк, щоб приєднатись"
-        shareText={teamName ? `Приєднуйся до команди «${teamName}» у WikiQuize` : "Приєднуйся до моєї команди у WikiQuize"}
+        shareText={teamName ? `Приєднуйся до команди «${teamName}» у Wiqus` : "Приєднуйся до моєї команди у Wiqus"}
       />
     </div>
   );

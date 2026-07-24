@@ -43,7 +43,7 @@ export function ChallengeButton({ gameSlug }: { gameSlug: string }) {
         title="Челендж кинуто!"
         url={url ?? ""}
         hint="Хай суперник відсканує код або відкриє лінк"
-        shareText="Виклик на квіз у WikiQuize!"
+        shareText="Виклик на квіз у Wiqus!"
       />
     </div>
   );

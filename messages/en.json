@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "WikiQuiz",
+    "name": "WiQus",
     "tagline": "Swipe through everything humanity knows",
     "description": "Fast quiz decks built from live Wikipedia data. Flags, arms, languages, cars — and anything the community creates."
   },
@@ -18,7 +18,7 @@
     "heroJoinText": "Keep your streaks — and start a team to settle who's actually the smartest.",
     "heroJoinCta": "Create account",
     "installTitle": "Install as an app",
-    "installBody": "Add WikiQuiz to your home screen for a full-screen, one-tap experience — no App Store needed.",
+    "installBody": "Add WiQus to your home screen for a full-screen, one-tap experience — no App Store needed.",
     "installCta": "Install",
     "installDismiss": "Dismiss",
     "installIosStep1": "Tap the Share button in Safari",

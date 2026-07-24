@@ -5,7 +5,7 @@ export type Filter = { prop: string; valueQid: string };
 
 const SEARCH_UA =
   process.env.WIKIMEDIA_UA ??
-  "WikiQuize/0.1 (https://wiqus.vercel.app; contact) class-search";
+  "Wiqus/0.1 (https://wiqus.vercel.app; contact) class-search";
 
 export interface ClassCandidate {
   qid: string;

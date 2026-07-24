@@ -26,7 +26,7 @@ export default async function AdminLayout({
             <Shield size={16} />
           </span>
           <span className="font-display text-sm font-semibold tracking-tight">
-            WikiQuiz · Адмін-панель
+            Wiqus · Адмін-панель
           </span>
         </div>
         <div className="flex items-center gap-2">

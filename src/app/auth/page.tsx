@@ -14,10 +14,10 @@ type Mode = "signin" | "signup";
 /**
  * Kid-friendly auth: NICKNAME + password. Email is OPTIONAL (recovery /
  * parents' address). Better Auth requires an email internally, so accounts
- * without one get a synthetic `nick@users.wikiquize.app` — sign-in accepts
+ * without one get a synthetic `nick@users.wiqus.app` — sign-in accepts
  * either the nickname or a real email.
  */
-const SYNTH_DOMAIN = "users.wikiquize.app";
+const SYNTH_DOMAIN = "users.wiqus.app";
 const NICK_RE = /^[a-zA-Z0-9_-]{3,20}$/;
 
 const toEmail = (nickOrEmail: string) =>
