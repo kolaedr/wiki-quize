@@ -43,6 +43,12 @@ export interface TopicDef {
    */
   filters?: { prop: string; valueQid: string }[];
   /**
+   * TAXON MODE: for living things (animals/plants), which are all P31 = taxon
+   * (Q16521) and grouped by PARENT TAXON (P171), not P31/P279. When true, the
+   * class QIDs are clades (e.g. Mammalia) matched with `wdt:P171*`.
+   */
+  taxonMode?: boolean;
+  /**
    * How level difficulty is ranked. Undefined = by POPULARITY (sitelinks:
    * famous first). A field role (of a date/number field) ranks by that value —
    * for dates, NEWER = easier (level 1), older = harder. E.g. historical figures
@@ -136,7 +142,8 @@ function queryShape(def: TopicDef, locales: readonly string[]) {
  * keeps P31/P279* so subclass instances count too (a castle is a subclass of
  * tourist attraction, a specific car model a subclass of automobile model…).
  */
-const classPath = (q: string) => (q === "Q5" ? "wdt:P31" : "wdt:P31/wdt:P279*");
+const classPath = (q: string, taxon = false) =>
+  taxon ? "wdt:P171*" : q === "Q5" ? "wdt:P31" : "wdt:P31/wdt:P279*";
 
 export function buildTopicQuery(
   def: TopicDef,
@@ -147,7 +154,7 @@ export function buildTopicQuery(
   const maxClause =
     range?.maxExclusive != null ? `FILTER(?sitelinks < ${range.maxExclusive})` : "";
   const classUnion = def.classQids
-    .map((q) => `{ ?item ${classPath(q)} wd:${q} . }`)
+    .map((q) => `{ ?item ${classPath(q, def.taxonMode)} wd:${q} . }`)
     .join("\n  UNION\n  ");
   const excludes = (def.excludeClassQids ?? [])
     .map((q) => `MINUS { ?item wdt:P31 wd:${q} . }`)
@@ -182,7 +189,7 @@ export function buildQidListQuery(def: TopicDef, sitelinksMin: number): string {
   // P31/P279* for normal classes (subclass instances count) but drops to direct
   // P31 for Q5 (human), whose P279* closure is what 504s this one-shot fetch.
   const classUnion = def.classQids
-    .map((q) => `{ ?item ${classPath(q)} wd:${q} . }`)
+    .map((q) => `{ ?item ${classPath(q, def.taxonMode)} wd:${q} . }`)
     .join("\n  UNION\n  ");
   return `
 SELECT ?item ?sitelinks WHERE {

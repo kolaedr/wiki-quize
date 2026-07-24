@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, games, topicEntities, topics } from "@/db/schema";
+import { user } from "@/db/auth-schema";
 import {
   autoGamesFor,
   validateDef,
@@ -32,7 +33,7 @@ import {
   startDefImportJob,
   type JobView,
 } from "@/lib/ingest/job";
-import { getAdminSession } from "./guard";
+import { getAdminSession, getStaff } from "./guard";
 
 export interface ActionResult {
   ok: boolean;
@@ -75,7 +76,7 @@ export async function setGameStatusAction(
   gameId: string,
   status: "published" | "unlisted" | "blocked",
 ): Promise<ActionResult> {
-  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (!(await getStaff())) return { ok: false, message: "forbidden" };
   try {
     // Publish gate: a game with too few playable items would 404 — refuse.
     if (status === "published") {
@@ -184,7 +185,7 @@ export async function renameGameAction(
   titleEn: string,
   titleUk: string,
 ): Promise<ActionResult> {
-  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (!(await getStaff())) return { ok: false, message: "forbidden" };
   if (!titleEn.trim()) return { ok: false, message: "Назва (EN) обовʼязкова" };
   try {
     await db
@@ -576,13 +577,14 @@ export async function probeFacetsAction(
   classQidsRaw: string,
   threshold: number,
   filters?: Filter[],
+  taxon = false,
 ): Promise<FacetsResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   const classQids = parseQids(classQidsRaw);
   if (classQids.length === 0 || classQids.some((q) => !/^Q\d+$/.test(q)))
     return { ok: false, message: "Класи мають бути виду Q3231690" };
   try {
-    const facets = await discoverFacets(classQids, Number(threshold) || 0, cleanFilters(filters));
+    const facets = await discoverFacets(classQids, Number(threshold) || 0, cleanFilters(filters), taxon);
     return { ok: true, facets };
   } catch (err) {
     return { ok: false, message: dbError(err) };
@@ -614,6 +616,7 @@ export async function probeClassAction(
   classQidsRaw: string,
   threshold = 30,
   filters?: Filter[],
+  taxon = false,
 ): Promise<ProbeResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   const classQids = parseQids(classQidsRaw);
@@ -621,8 +624,8 @@ export async function probeClassAction(
     return { ok: false, message: "Класи мають бути виду Q3231690 (через кому)" };
   const flt = cleanFilters(filters);
   const [countRes, fieldsRes] = await Promise.allSettled([
-    countForClass(classQids, threshold, flt),
-    discoverFields(classQids, flt),
+    countForClass(classQids, threshold, flt, taxon),
+    discoverFields(classQids, flt, taxon),
   ]);
   const total = countRes.status === "fulfilled" ? countRes.value : undefined;
   const disc = fieldsRes.status === "fulfilled" ? fieldsRes.value : null;
@@ -649,6 +652,7 @@ export async function countClassAction(
   classQidsRaw: string,
   threshold: number,
   filters?: Filter[],
+  taxon = false,
 ): Promise<CountResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   const classQids = parseQids(classQidsRaw);
@@ -656,7 +660,7 @@ export async function countClassAction(
   try {
     return {
       ok: true,
-      total: await countForClass(classQids, Number(threshold) || 0, cleanFilters(filters)),
+      total: await countForClass(classQids, Number(threshold) || 0, cleanFilters(filters), taxon),
     };
   } catch (err) {
     return { ok: false, message: dbError(err) };
@@ -725,6 +729,7 @@ export async function createDatasetAction(input: {
   locales?: string[];
   filters?: Filter[];
   difficultyBy?: string;
+  taxonMode?: boolean;
 }): Promise<CreateDraftResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   const titleEn = input.titleEn.trim();
@@ -754,6 +759,7 @@ export async function createDatasetAction(input: {
       locales: locs,
       ...(flt.length ? { filters: flt } : {}),
       ...(input.difficultyBy ? { difficultyBy: input.difficultyBy } : {}),
+      ...(input.taxonMode ? { taxonMode: true } : {}),
     };
     validateDef(def);
     await db.insert(topics).values({
@@ -783,6 +789,7 @@ export async function setupTopicAction(
   locales: string[] = ["en"],
   filters?: Filter[],
   difficultyBy?: string,
+  taxonMode = false,
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   try {
@@ -803,6 +810,7 @@ export async function setupTopicAction(
       locales: locs,
       ...(flt.length ? { filters: flt } : {}),
       ...(difficultyBy ? { difficultyBy } : {}),
+      ...(taxonMode ? { taxonMode: true } : {}),
     };
     validateDef(def);
     // SAVE config only — the heavy import runs as a batched job (startImportJobAction),
@@ -1053,6 +1061,111 @@ export async function toggleEntityAction(entityId: string): Promise<ActionResult
       .where(eq(topicEntities.id, entityId));
     revalidatePath("/admin", "layout");
     return { ok: true, message: row.excluded ? "увімкнено" : "вимкнено" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/**
+ * Change a game's icon (staff: super OR game moderator). The icon name is a key
+ * of the GameIcon set — validated loosely here (the picker only offers real ones).
+ */
+export async function setGameIconAction(gameId: string, icon: string): Promise<ActionResult> {
+  if (!(await getStaff())) return { ok: false, message: "forbidden" };
+  const name = icon.trim();
+  if (!/^[a-z0-9-]{1,40}$/.test(name)) return { ok: false, message: "невірна іконка" };
+  try {
+    const [g] = await db.select({ style: games.style }).from(games).where(eq(games.id, gameId)).limit(1);
+    if (!g) return { ok: false, message: "гру не знайдено" };
+    const style = { ...((g.style ?? {}) as Record<string, unknown>), icon: name };
+    await db.update(games).set({ style }).where(eq(games.id, gameId));
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { ok: true, message: "іконку збережено" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+export interface AdminUserRow {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  /** super (env/admin) rows can't be demoted from the UI */
+  locked: boolean;
+}
+
+/** Paginated user list for the super-admin (email + role). */
+export async function listUsersAction(
+  page: number,
+  pageSize = 20,
+): Promise<{ ok: true; users: AdminUserRow[]; hasNext: boolean } | { ok: false; message: string }> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const p = Math.max(1, Math.floor(page) || 1);
+  const allowlist = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  try {
+    const rows = await db
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+      })
+      .from(user)
+      .orderBy(desc(user.createdAt))
+      .limit(pageSize + 1)
+      .offset((p - 1) * pageSize);
+    const hasNext = rows.length > pageSize;
+    return {
+      ok: true,
+      hasNext,
+      users: rows.slice(0, pageSize).map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt.toISOString(),
+        locked: u.role === "admin" || allowlist.includes(u.email.toLowerCase()),
+      })),
+    };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/**
+ * Grant / revoke the game-moderator role (super-admin only). Only toggles
+ * between "user" and "moderator" — super access stays env/DB-controlled, so it
+ * can't be handed out (or stripped) from this screen.
+ */
+export async function setUserRoleAction(
+  userId: string,
+  role: "user" | "moderator",
+): Promise<ActionResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (role !== "user" && role !== "moderator") return { ok: false, message: "невідома роль" };
+  try {
+    const [target] = await db
+      .select({ email: user.email, role: user.role })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    if (!target) return { ok: false, message: "користувача не знайдено" };
+    const allowlist = (process.env.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    if (target.role === "admin" || allowlist.includes(target.email.toLowerCase()))
+      return { ok: false, message: "це супер-адмін — роль керується через ENV" };
+    await db.update(user).set({ role, updatedAt: new Date() }).where(eq(user.id, userId));
+    revalidatePath("/admin/users");
+    return { ok: true, message: role === "moderator" ? "модератор" : "звичайний" };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }

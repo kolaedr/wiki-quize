@@ -8,22 +8,27 @@ import {
   Gamepad2,
   LayoutDashboard,
   MessageSquare,
+  Users,
 } from "lucide-react";
+import type { StaffLevel } from "@/lib/admin/guard";
 
+/** superOnly links are hidden from moderators (who only tidy games). */
 const LINKS = [
-  { href: "/admin", label: "Огляд", icon: LayoutDashboard, exact: true },
-  { href: "/admin/categories", label: "Категорії", icon: FolderTree },
-  { href: "/admin/topics", label: "Датасети", icon: Database },
-  { href: "/admin/games", label: "Ігри", icon: Gamepad2 },
-  { href: "/admin/feedback", label: "Фідбек", icon: MessageSquare },
+  { href: "/admin", label: "Огляд", icon: LayoutDashboard, exact: true, superOnly: true },
+  { href: "/admin/categories", label: "Категорії", icon: FolderTree, superOnly: true },
+  { href: "/admin/topics", label: "Датасети", icon: Database, superOnly: true },
+  { href: "/admin/games", label: "Ігри", icon: Gamepad2, superOnly: false },
+  { href: "/admin/feedback", label: "Фідбек", icon: MessageSquare, superOnly: true },
+  { href: "/admin/users", label: "Користувачі", icon: Users, superOnly: true },
 ];
 
 /** Admin sidebar navigation — horizontal on mobile, vertical column on desktop. */
-export function AdminNav() {
+export function AdminNav({ level }: { level: StaffLevel }) {
   const pathname = usePathname();
+  const links = LINKS.filter((l) => level === "super" || !l.superOnly);
   return (
     <nav className="flex gap-1 overflow-x-auto lg:flex-col">
-      {LINKS.map(({ href, label, icon: Icon, exact }) => {
+      {links.map(({ href, label, icon: Icon, exact }) => {
         const active = exact
           ? pathname === href
           : pathname === href || pathname.startsWith(`${href}/`);

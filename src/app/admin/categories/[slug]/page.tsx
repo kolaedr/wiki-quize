@@ -24,6 +24,7 @@ import {
   setCategoryImageAction,
 } from "@/lib/admin/actions";
 import { resolveText } from "@/i18n/locales";
+import { requireSuperPage } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // creating a dataset runs an import
@@ -34,6 +35,7 @@ export default async function AdminCategoryPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  await requireSuperPage();
   const { slug } = await params;
 
   const [cat] = await db.select().from(categories).where(eq(categories.slug, slug)).limit(1);

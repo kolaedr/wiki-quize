@@ -280,6 +280,7 @@ export function DatasetSetup({
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<ActiveFilter[]>([]);
   const [photoOnly, setPhotoOnly] = useState(false);
+  const [taxonMode, setTaxonMode] = useState(false); // animals/plants: match by P171*
   const [difficultyBy, setDifficultyBy] = useState(""); // "" = popularity
   const [facets, setFacets] = useState<Facet[] | null>(null);
   const [loadingFacets, startFacets] = useTransition();
@@ -307,6 +308,7 @@ export function DatasetSetup({
         classCsv,
         threshold,
         filters.map((f) => ({ prop: f.prop, valueQid: f.valueQid })),
+        taxonMode,
       );
       setFacets(r.ok ? (r.facets ?? []) : []);
     });
@@ -372,7 +374,7 @@ export function DatasetSetup({
   const runProbe = () =>
     startProbe(async () => {
       setResult(null);
-      const r = await probeClassAction(classCsv, threshold, filterPayload);
+      const r = await probeClassAction(classCsv, threshold, filterPayload, taxonMode);
       setProbe(r);
       setTotal(r.total ?? null);
       if (r.ok && r.fields) {
@@ -384,7 +386,7 @@ export function DatasetSetup({
 
   const recount = () =>
     startCount(async () => {
-      const r = await countClassAction(classCsv, threshold, filterPayload);
+      const r = await countClassAction(classCsv, threshold, filterPayload, taxonMode);
       if (r.ok) setTotal(r.total ?? null);
     });
 
@@ -425,6 +427,7 @@ export function DatasetSetup({
           locales: [...locales],
           filters: filterPayload,
           difficultyBy: difficultyBy || undefined,
+          taxonMode,
         });
         setResult(r);
         if (r.ok && r.slug) router.push(`/admin/topics/${r.slug}`); // → chunked import
@@ -437,6 +440,7 @@ export function DatasetSetup({
           ["en", ...locales],
           filterPayload,
           difficultyBy || undefined,
+          taxonMode,
         );
         setResult(r);
         if (r.ok) setSaved(true); // switches to the batched import runner below
@@ -611,6 +615,21 @@ export function DatasetSetup({
       <label className="flex items-center gap-2 text-xs text-muted">
         <input type="checkbox" checked={photoOnly} onChange={(e) => setPhotoOnly(e.target.checked)} />
         Лише айтеми з фото (для візуальних ігор)
+      </label>
+
+      <label className="flex items-start gap-2 text-xs text-muted">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={taxonMode}
+          onChange={(e) => setTaxonMode(e.target.checked)}
+        />
+        <span>
+          Таксон-режим (тварини/рослини): шукати за деревом{" "}
+          <span className="font-semibold">parent taxon (P171)</span>, а не за класом. Клас
+          обери як конкретну групу — напр. «Mammalia», «Aves», «Felidae». Так «усі ссавці»
+          нарешті потягне, а не впреться в мільйони таксонів.
+        </span>
       </label>
 
       <Button size="sm" className="self-start" disabled={probing || classItems.length === 0} onClick={runProbe}>

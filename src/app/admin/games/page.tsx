@@ -5,6 +5,7 @@ import { games, topics } from "@/db/schema";
 import { GameAdminCard } from "@/components/admin/game-admin-card";
 import { GamesFilter } from "@/components/admin/games-filter";
 import { Pagination } from "@/components/pagination";
+import { getStaff } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 const PAGE = 15;
@@ -16,6 +17,7 @@ export default async function AdminGamesPage({
   searchParams: Promise<{ page?: string; status?: string; sort?: string; q?: string }>;
 }) {
   const sp = await searchParams;
+  const mod = (await getStaff())?.level === "moderator";
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
   const status = sp.status ?? "all";
   const sort = sp.sort ?? "new";
@@ -81,6 +83,7 @@ export default async function AdminGamesPage({
             key={row.game.id}
             game={row.game}
             fieldSchema={(row.fieldSchema ?? []) as { role: string; kind: string }[]}
+            mod={mod}
           />
         ))}
       </section>

@@ -60,6 +60,21 @@ const TREE: Node[] = [
       { slug: "aircraft", en: "Aircraft", uk: "Літаки", icon: "plane", hints: ["airliner", "aircraft model"] },
       { slug: "trains", en: "Trains", uk: "Потяги", icon: "train", hints: ["locomotive class", "train"] },
       { slug: "ships", en: "Ships", uk: "Кораблі", icon: "ship", hints: ["ship class", "ship"] },
+      {
+        slug: "road-signs",
+        en: "Road signs",
+        uk: "Дорожні знаки",
+        icon: "sign",
+        hints: ["road sign", "traffic sign"],
+        note: "поріг sitelinks=0 (у знаків їх майже нема), гейт «лише з фото» (P18). По країнах — окремий датасет на країну (клас traffic sign + фільтр country P17, або клас знаків конкретної країни).",
+        children: [
+          { slug: "road-signs-europe", en: "Europe", uk: "Європа", icon: "globe" },
+          { slug: "road-signs-americas", en: "Americas", uk: "Америка", icon: "globe" },
+          { slug: "road-signs-asia", en: "Asia", uk: "Азія", icon: "globe" },
+          { slug: "road-signs-africa", en: "Africa", uk: "Африка", icon: "globe" },
+          { slug: "road-signs-oceania", en: "Oceania", uk: "Океанія", icon: "globe" },
+        ],
+      },
     ],
   },
   {
@@ -167,16 +182,19 @@ async function upsert(node: Node, sortOrder: number, parentId: string | null): P
   return row!.id;
 }
 
+/** Upsert a node and all its descendants (arbitrary nesting depth). */
+async function upsertTree(node: Node, sortOrder: number, parentId: string | null): Promise<number> {
+  const id = await upsert(node, sortOrder, parentId);
+  let n = 1;
+  for (const [i, child] of (node.children ?? []).entries()) {
+    n += await upsertTree(child, i, id);
+  }
+  return n;
+}
+
 async function main() {
   let n = 0;
-  for (const [i, parent] of TREE.entries()) {
-    const pid = await upsert(parent, i, null);
-    n++;
-    for (const [j, child] of (parent.children ?? []).entries()) {
-      await upsert(child, j, pid);
-      n++;
-    }
-  }
+  for (const [i, parent] of TREE.entries()) n += await upsertTree(parent, i, null);
   console.log(`✓ Seeded ${n} categories (${TREE.length} top-level with nesting).`);
 }
 

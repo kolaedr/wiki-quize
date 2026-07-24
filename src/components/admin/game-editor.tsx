@@ -12,9 +12,11 @@ import {
   renameGameAction,
   setGameConfigAction,
   setGameCoverAction,
+  setGameIconAction,
   setGameVisualAction,
   type CoverageResult,
 } from "@/lib/admin/actions";
+import { GameIcon, ICON_NAMES } from "@/components/game-icon";
 
 interface FieldDef {
   role: string;
@@ -37,6 +39,8 @@ export function GameEditor({
   valueRole,
   refRole,
   cover,
+  icon,
+  mod = false,
 }: {
   gameId: string;
   titleEn: string;
@@ -52,10 +56,14 @@ export function GameEditor({
   valueRole?: string;
   refRole?: string;
   cover?: string;
+  icon?: string;
+  /** moderator view: only title + icon (no deck/visual/cover/delete) */
+  mod?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [en, setEn] = useState(titleEn);
   const [uk, setUk] = useState(titleUk);
+  const [ic, setIc] = useState(icon ?? "deck");
   const [deck, setDeck] = useState(deckSize);
   const [per, setPer] = useState(perLevel);
   const [pending, start] = useTransition();
@@ -87,6 +95,14 @@ export function GameEditor({
       const r = await renameGameAction(gameId, en, uk);
       setMsg(r.message);
     });
+
+  const saveIcon = (name: string) => {
+    setIc(name);
+    start(async () => {
+      const r = await setGameIconAction(gameId, name);
+      setMsg(r.message);
+    });
+  };
 
   const saveConfig = () =>
     start(async () => {
@@ -149,8 +165,26 @@ export function GameEditor({
         </Button>
       </div>
 
+      {/* icon — the game's fallback visual (used when there's no cover image) */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-line/40 pt-2 text-xs text-muted">
+        <span className="font-semibold text-fg">Іконка</span>
+        <GameIcon name={ic} size={18} className="h-8 w-8" />
+        <select
+          value={ic}
+          onChange={(e) => saveIcon(e.target.value)}
+          className="h-9 rounded-lg border border-line/60 bg-transparent px-2 text-fg outline-none focus:border-accent"
+        >
+          {ICON_NAMES.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <span className="text-[11px]">зберігається одразу</span>
+      </div>
+
       {/* VISUAL: which dataset fields are shown as question / answer */}
-      {hasVisual && (
+      {!mod && hasVisual && (
         <div className="flex flex-col gap-2 border-t border-line/40 pt-2">
           <span className="text-xs font-semibold text-fg">Візуал гри — що показуємо</span>
           <div className="flex flex-wrap items-end gap-3 text-xs text-muted">
@@ -216,6 +250,7 @@ export function GameEditor({
       )}
 
       {/* deck config */}
+      {!mod && (
       <div className="flex flex-col gap-2 border-t border-line/40 pt-2">
         <span className="text-xs font-semibold text-fg">Колода й рівні</span>
         <div className="flex flex-wrap items-end gap-3 text-xs text-muted">
@@ -247,27 +282,32 @@ export function GameEditor({
           </Button>
         </div>
       </div>
+      )}
 
       {/* cover image */}
-      <ItemImagePicker
-        label="Обкладинка гри"
-        hint="Зʼявиться на картці гри в каталозі замість іконки."
-        initial={cover}
-        load={() => listGameItemImagesAction(gameId)}
-        save={(u) => setGameCoverAction(gameId, u)}
-      />
+      {!mod && (
+        <ItemImagePicker
+          label="Обкладинка гри"
+          hint="Зʼявиться на картці гри в каталозі замість іконки."
+          initial={cover}
+          load={() => listGameItemImagesAction(gameId)}
+          save={(u) => setGameCoverAction(gameId, u)}
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-line/40 pt-2">
-        <Button
-          size="sm"
-          variant={armed ? "default" : "ghost"}
-          disabled={pending}
-          onClick={del}
-          onBlur={() => setArmed(false)}
-        >
-          <Trash2 size={13} />
-          {armed ? "Точно? Ще раз" : "Видалити"}
-        </Button>
+        {!mod && (
+          <Button
+            size="sm"
+            variant={armed ? "default" : "ghost"}
+            disabled={pending}
+            onClick={del}
+            onBlur={() => setArmed(false)}
+          >
+            <Trash2 size={13} />
+            {armed ? "Точно? Ще раз" : "Видалити"}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
           <X size={13} /> Закрити
         </Button>

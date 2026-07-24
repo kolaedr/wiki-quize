@@ -11,12 +11,14 @@ import { CategorySelect } from "@/components/admin/category-controls";
 import { DatasetSetup } from "@/components/admin/dataset-setup";
 import { ImportRunner } from "@/components/admin/import-runner";
 import { Button } from "@/components/ui/button";
+import { requireSuperPage } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // imports run inside server actions
 
 /** Topics: import / resync by click, plus the no-code topic builder. */
 export default async function AdminTopicsPage() {
+  await requireSuperPage();
   const [topicRows, counts, categoryRows] = await Promise.all([
     db.select().from(topics).catch(() => []),
     db
