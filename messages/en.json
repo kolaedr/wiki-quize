@@ -72,6 +72,8 @@
     "bestStreak": "Best streak",
     "streak": "streak",
     "playAgain": "Play again",
+    "nextLevel": "Next",
+    "backToLevels": "Back",
     "readMore": "Read on Wikipedia"
   },
   "levels": {

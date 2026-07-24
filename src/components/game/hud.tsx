@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { Flame, Heart, RotateCcw, Sparkles, MoonStar } from "lucide-react";
+import { ArrowRight, Flame, Heart, RotateCcw, Sparkles, MoonStar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
@@ -71,13 +72,20 @@ export function ResultScreen({
   best,
   lives,
   onRestart,
+  nextHref,
+  backHref,
 }: {
   score: number;
   best: number;
   lives: number;
   onRestart: () => void;
+  /** next level — offered only when the deck was passed (lives > 0) */
+  nextHref?: string;
+  /** back to the level map / catalog */
+  backHref?: string;
 }) {
   const t = useTranslations("game");
+  const canNext = lives > 0 && !!nextHref;
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
       <div className="glass-card shadow-glow flex w-full max-w-sm flex-col items-center gap-3 p-8">
@@ -91,10 +99,36 @@ export function ResultScreen({
         <p className="text-sm text-muted">
           {t("bestStreak")}: {best}
         </p>
-        <Button onClick={onRestart} size="lg" className="mt-2">
-          <RotateCcw size={15} />
-          {t("playAgain")}
-        </Button>
+
+        <div className="mt-2 flex items-center gap-2">
+          {/* retry — icon only */}
+          <Button
+            onClick={onRestart}
+            size="lg"
+            variant={canNext ? "glass" : "default"}
+            className="px-4"
+            aria-label={t("playAgain")}
+            title={t("playAgain")}
+          >
+            <RotateCcw size={18} />
+          </Button>
+          {canNext && (
+            <Button asChild size="lg">
+              <Link href={nextHref!}>
+                {t("nextLevel")} <ArrowRight size={16} />
+              </Link>
+            </Button>
+          )}
+        </div>
+
+        {backHref && (
+          <Link
+            href={backHref}
+            className="text-sm text-muted underline underline-offset-4 transition-colors hover:text-accent"
+          >
+            {t("backToLevels")}
+          </Link>
+        )}
       </div>
     </main>
   );

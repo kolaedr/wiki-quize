@@ -11,10 +11,12 @@ interface Props {
   title: string;
   cards: ChoiceCard[];
   onFinish?: (r: SessionResult) => void;
+  nextHref?: string;
+  backHref?: string;
 }
 
 /** Quad layout of the `choice` mechanic: big prompt card + 2×2 tap options. */
-export function GameBoard({ title, cards, onFinish }: Props) {
+export function GameBoard({ title, cards, onFinish, nextHref, backHref }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const [imgFailed, setImgFailed] = useState(false);
@@ -23,7 +25,16 @@ export function GameBoard({ title, cards, onFinish }: Props) {
 
   const card = cards[s.idx];
   if (s.done || !card) {
-    return <ResultScreen score={s.score} best={s.best} lives={s.lives} onRestart={s.restart} />;
+    return (
+      <ResultScreen
+        score={s.score}
+        best={s.best}
+        lives={s.lives}
+        onRestart={s.restart}
+        nextHref={nextHref}
+        backHref={backHref}
+      />
+    );
   }
 
   return (

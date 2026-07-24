@@ -22,6 +22,8 @@ interface Props {
   /** Cards built with optionCount: 2 — prompt on top, a pair of cards "in hand". */
   cards: ChoiceCard[];
   onFinish?: (r: SessionResult) => void;
+  nextHref?: string;
+  backHref?: string;
 }
 
 /**
@@ -30,14 +32,23 @@ interface Props {
  * throw it (distance or flick velocity) to pick it — it flies off with
  * your throw's momentum. Tap/click also picks. Keyboard: ← →.
  */
-export function SwipeDuelBoard({ title, cards, onFinish }: Props) {
+export function SwipeDuelBoard({ title, cards, onFinish, nextHref, backHref }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
 
   const card = cards[s.idx];
   if (s.done || !card) {
-    return <ResultScreen score={s.score} best={s.best} lives={s.lives} onRestart={s.restart} />;
+    return (
+      <ResultScreen
+        score={s.score}
+        best={s.best}
+        lives={s.lives}
+        onRestart={s.restart}
+        nextHref={nextHref}
+        backHref={backHref}
+      />
+    );
   }
 
   const pick = (o: ChoiceOption) => s.answer(o.key, o.key === card.correctKey);

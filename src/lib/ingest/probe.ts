@@ -141,6 +141,26 @@ export function countAtThreshold(
   return dist.reduce((sum, d) => (d.sitelinks >= threshold ? sum + d.n : sum), 0);
 }
 
+/**
+ * Is this QID actually a ROLE people hold (occupation/position) rather than a
+ * class of people? Counts humans (Q5) whose occupation (P106) or position held
+ * (P39) is this entity. If large, the admin picked "president" the concept when
+ * they wanted "humans who are presidents" → we can nudge them.
+ */
+export async function humansWithRole(qid: string): Promise<{ occupation: number; position: number }> {
+  if (!QID_RE.test(qid)) return { occupation: 0, position: 0 };
+  const one = async (prop: string) => {
+    const rows = await sparqlQuery(`
+SELECT (COUNT(DISTINCT ?o) AS ?n) WHERE {
+  ?o wdt:P31 wd:Q5 ; wdt:${prop} wd:${qid} ; wikibase:sitelinks ?sl .
+  FILTER(?sl >= 1)
+}`);
+    return Number(rows[0]?.n?.value ?? 0);
+  };
+  const [occupation, position] = await Promise.all([one("P106"), one("P39")]);
+  return { occupation, position };
+}
+
 /** How many items of the class exist at a sitelinks threshold — ONE count. */
 export async function countForClass(
   classQids: string[],

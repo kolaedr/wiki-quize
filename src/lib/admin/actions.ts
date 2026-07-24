@@ -14,6 +14,7 @@ import {
   countForClass,
   discoverFacets,
   discoverFields,
+  humansWithRole,
   searchClasses,
   searchProperties,
   type ClassCandidate,
@@ -540,6 +541,28 @@ function cleanFilters(filters?: Filter[]): Filter[] {
   return (filters ?? []).filter(
     (f) => /^P\d+$/.test(f?.prop) && (!f?.valueQid || /^Q\d+$/.test(f.valueQid)),
   );
+}
+
+export interface RoleCheckResult {
+  ok: boolean;
+  message?: string;
+  occupation?: number;
+  position?: number;
+}
+
+/**
+ * Does this class look like a ROLE (many humans hold it) rather than a class of
+ * people? Used to nudge "you picked the concept — take humans with this role".
+ */
+export async function roleCheckAction(qid: string): Promise<RoleCheckResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  if (!/^Q\d+$/.test(qid)) return { ok: false, message: "bad qid" };
+  try {
+    const { occupation, position } = await humansWithRole(qid);
+    return { ok: true, occupation, position };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
 }
 
 export interface FacetsResult {

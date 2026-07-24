@@ -51,6 +51,7 @@ export default async function GameLevelPage({
       seed={`${seed}#L${decks.level}`}
       slug={decks.slug}
       level={decks.level}
+      levels={decks.config.levels}
       backHref={`/play/${decks.slug}`}
     />
   );

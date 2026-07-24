@@ -26,6 +26,8 @@ interface Props {
   /** Set for level-based games — passing the level unlocks the next one. */
   slug?: string;
   level?: number;
+  /** total levels — used to offer "next level" on the result screen */
+  levels?: number;
   /** where the back button leads (level map / catalog) */
   backHref?: string;
 }
@@ -45,6 +47,7 @@ export function PlayScreen({
   seed,
   slug,
   level,
+  levels,
   backHref = "/",
 }: Props) {
   const t = useTranslations();
@@ -78,15 +81,19 @@ export function PlayScreen({
 
   const showLayoutSwitch = mechanic === "choice" && quadCards.length > 0;
 
+  const nextHref =
+    slug && level && levels && level < levels ? `/play/${slug}/${level + 1}` : undefined;
+  const nav = { nextHref, backHref };
+
   let board: React.ReactNode;
   if (mechanic === "swipe_binary" || (mechanic === "choice" && active === "single")) {
     board = (
-      <SwipeBinaryBoard key="single" title={title} cards={binaryCards} onFinish={onFinish} />
+      <SwipeBinaryBoard key="single" title={title} cards={binaryCards} onFinish={onFinish} {...nav} />
     );
   } else if (mechanic === "higher_lower" || active === "duel") {
-    board = <SwipeDuelBoard key="duel" title={title} cards={duelCards} onFinish={onFinish} />;
+    board = <SwipeDuelBoard key="duel" title={title} cards={duelCards} onFinish={onFinish} {...nav} />;
   } else {
-    board = <GameBoard key="quad" title={title} cards={quadCards} onFinish={onFinish} />;
+    board = <GameBoard key="quad" title={title} cards={quadCards} onFinish={onFinish} {...nav} />;
   }
 
   return (

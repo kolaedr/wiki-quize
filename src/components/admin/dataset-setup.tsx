@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Search, X } from "lucide-react";
+import { Lightbulb, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,6 +10,7 @@ import {
   createDatasetAction,
   probeClassAction,
   probeFacetsAction,
+  roleCheckAction,
   searchClassesAction,
   searchPropertiesAction,
   setupTopicAction,
@@ -280,6 +281,9 @@ export function DatasetSetup({
   const [difficultyBy, setDifficultyBy] = useState(""); // "" = popularity
   const [facets, setFacets] = useState<Facet[] | null>(null);
   const [loadingFacets, startFacets] = useTransition();
+  const [roleHint, setRoleHint] = useState<
+    { qid: string; label: string; occupation: number; position: number } | null
+  >(null);
   const [locales, setLocales] = useState<Set<string>>(new Set(["uk"]));
   const [searching, startSearch] = useTransition();
   const [probing, startProbe] = useTransition();
@@ -317,6 +321,43 @@ export function DatasetSetup({
   const addClass = (c: ClassCandidate) => {
     setClassItems((xs) => (xs.some((x) => x.qid === c.qid) ? xs : [...xs, c]));
     if (isCreate && !nameEn.trim()) setNameEn(c.label); // auto-suggest the name
+  };
+
+  // detect "role, not a class of people" (e.g. picked "president" concept)
+  useEffect(() => {
+    setRoleHint(null);
+    if (classItems.length !== 1) return;
+    const c = classItems[0];
+    if (c.qid === "Q5") return; // "human" itself is fine
+    let cancelled = false;
+    roleCheckAction(c.qid).then((r) => {
+      if (cancelled || !r.ok) return;
+      if (Math.max(r.occupation ?? 0, r.position ?? 0) >= 20)
+        setRoleHint({
+          qid: c.qid,
+          label: c.label,
+          occupation: r.occupation ?? 0,
+          position: r.position ?? 0,
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classItems]);
+
+  const applyRole = () => {
+    if (!roleHint) return;
+    const prop = roleHint.occupation >= roleHint.position ? "P106" : "P39";
+    const propLabel = prop === "P106" ? "рід занять" : "посада";
+    setClassItems([{ qid: "Q5", label: "human" }]);
+    setFilters([{ prop, valueQid: roleHint.qid, propLabel, valueLabel: roleHint.label }]);
+    setFacets(null);
+    setProbe(null);
+    setPicked(new Set());
+    setTotal(null);
+    if (isCreate && !nameEn.trim()) setNameEn(roleHint.label);
+    setRoleHint(null);
   };
 
   const runSearch = () =>
@@ -471,6 +512,22 @@ export function DatasetSetup({
               </button>
             </span>
           ))}
+        </div>
+      )}
+
+      {roleHint && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-accent/40 bg-accent-soft/40 p-2.5 text-xs">
+          <p className="flex items-center gap-1.5 font-semibold text-fg">
+            <Lightbulb size={13} className="text-accent" /> «{roleHint.label}» — це радше роль, а не
+            клас людей
+          </p>
+          <p className="text-muted">
+            Людей із цією роллю: рід занять {roleHint.occupation}, посада {roleHint.position}. Краще
+            взяти клас «людина» і звузити цією роллю.
+          </p>
+          <Button size="sm" variant="secondary" className="self-start" onClick={applyRole}>
+            Взяти людей з роллю «{roleHint.label}»
+          </Button>
         </div>
       )}
 

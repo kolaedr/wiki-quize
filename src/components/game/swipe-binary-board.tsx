@@ -20,6 +20,8 @@ interface Props {
   title: string;
   cards: BinaryCard[];
   onFinish?: (r: SessionResult) => void;
+  nextHref?: string;
+  backHref?: string;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * Swipe RIGHT = true, LEFT = false (the card itself flies away).
  * Mouse devices: ✗ / ✓ buttons. Keyboard: ← false, → true.
  */
-export function SwipeBinaryBoard({ title, cards, onFinish }: Props) {
+export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
@@ -41,7 +43,16 @@ export function SwipeBinaryBoard({ title, cards, onFinish }: Props) {
 
   const card = cards[s.idx];
   if (s.done || !card) {
-    return <ResultScreen score={s.score} best={s.best} lives={s.lives} onRestart={s.restart} />;
+    return (
+      <ResultScreen
+        score={s.score}
+        best={s.best}
+        lives={s.lives}
+        onRestart={s.restart}
+        nextHref={nextHref}
+        backHref={backHref}
+      />
+    );
   }
 
   const pick = (saidTrue: boolean) =>
