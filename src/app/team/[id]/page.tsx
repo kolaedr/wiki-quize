@@ -103,7 +103,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
           <Link2 size={14} /> Запросити
         </h2>
-        <InviteButton teamId={team.id} />
+        <InviteButton teamId={team.id} teamName={team.name} />
       </section>
     </main>
   );
