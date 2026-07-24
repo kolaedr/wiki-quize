@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   countClassAction,
+  createDatasetAction,
   probeClassAction,
+  probeFacetsAction,
   searchClassesAction,
   searchPropertiesAction,
   setupTopicAction,
@@ -16,12 +18,19 @@ import {
 } from "@/lib/admin/actions";
 import type {
   ClassCandidate,
+  Facet,
   Filter,
   ProbeField,
   PropertyCandidate,
 } from "@/lib/ingest/probe";
 import type { TopicFieldDef } from "@/lib/ingest/def";
 import { ImportRunner } from "@/components/admin/import-runner";
+import { ICON_NAMES } from "@/components/game-icon";
+
+export interface DatasetCategoryOption {
+  id: string;
+  title: string;
+}
 
 /** human-readable field kinds */
 const KIND_UK: Record<string, string> = {
@@ -242,8 +251,22 @@ function FilterBuilder({
  * (English is always the root; more can be added later via a re-sync). Only
  * then does the heavy batch import run.
  */
-export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
+export function DatasetSetup({
+  topicSlug,
+  categoryId,
+  categoryOptions,
+}: {
+  /** present = configure an existing draft; absent = CREATE a new dataset */
+  topicSlug?: string;
+  categoryId?: string;
+  categoryOptions?: DatasetCategoryOption[];
+}) {
+  const isCreate = !topicSlug;
   const router = useRouter();
+  const [nameEn, setNameEn] = useState("");
+  const [nameUk, setNameUk] = useState("");
+  const [icon, setIcon] = useState("deck");
+  const [catId, setCatId] = useState(categoryId ?? "");
   const [classItems, setClassItems] = useState<ClassCandidate[]>([]);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<ClassCandidate[] | null>(null);
@@ -253,6 +276,10 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const [total, setTotal] = useState<number | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<ActiveFilter[]>([]);
+  const [photoOnly, setPhotoOnly] = useState(false);
+  const [difficultyBy, setDifficultyBy] = useState(""); // "" = popularity
+  const [facets, setFacets] = useState<Facet[] | null>(null);
+  const [loadingFacets, startFacets] = useTransition();
   const [locales, setLocales] = useState<Set<string>>(new Set(["uk"]));
   const [searching, startSearch] = useTransition();
   const [probing, startProbe] = useTransition();
@@ -263,9 +290,34 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
 
   const classCsv = classItems.map((c) => c.qid).join(", ");
   const classQids = classItems.map((c) => c.qid);
-  const filterPayload: Filter[] = filters.map((f) => ({ prop: f.prop, valueQid: f.valueQid }));
-  const addClass = (c: ClassCandidate) =>
+  const filterPayload: Filter[] = [
+    ...filters.map((f) => ({ prop: f.prop, valueQid: f.valueQid })),
+    ...(photoOnly ? [{ prop: "P18", valueQid: "" }] : []), // "лише з фото"
+  ];
+
+  const loadFacets = () =>
+    startFacets(async () => {
+      const r = await probeFacetsAction(
+        classCsv,
+        threshold,
+        filters.map((f) => ({ prop: f.prop, valueQid: f.valueQid })),
+      );
+      setFacets(r.ok ? (r.facets ?? []) : []);
+    });
+
+  const facetSelected = (prop: string, qid: string) =>
+    filters.some((f) => f.prop === prop && f.valueQid === qid);
+
+  const toggleFacet = (facet: Facet, v: { qid: string; label: string }) =>
+    setFilters((fs) =>
+      facetSelected(facet.prop, v.qid)
+        ? fs.filter((f) => !(f.prop === facet.prop && f.valueQid === v.qid))
+        : [...fs, { prop: facet.prop, valueQid: v.qid, propLabel: facet.propLabel, valueLabel: v.label }],
+    );
+  const addClass = (c: ClassCandidate) => {
     setClassItems((xs) => (xs.some((x) => x.qid === c.qid) ? xs : [...xs, c]));
+    if (isCreate && !nameEn.trim()) setNameEn(c.label); // auto-suggest the name
+  };
 
   const runSearch = () =>
     startSearch(async () => {
@@ -318,21 +370,43 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
   const submit = () =>
     start(async () => {
       const fields = fieldsFrom((probe?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind));
-      const r = await setupTopicAction(
-        topicSlug,
-        classQids,
-        threshold,
-        fields,
-        ["en", ...locales],
-        filterPayload,
-      );
-      setResult(r);
-      if (r.ok) setSaved(true); // switches to the batched import runner below
+      if (isCreate) {
+        const r = await createDatasetAction({
+          titleEn: nameEn,
+          titleUk: nameUk,
+          icon,
+          categoryId: catId,
+          classQids,
+          sitelinksMin: threshold,
+          fields,
+          locales: [...locales],
+          filters: filterPayload,
+          difficultyBy: difficultyBy || undefined,
+        });
+        setResult(r);
+        if (r.ok && r.slug) router.push(`/admin/topics/${r.slug}`); // → chunked import
+      } else {
+        const r = await setupTopicAction(
+          topicSlug!,
+          classQids,
+          threshold,
+          fields,
+          ["en", ...locales],
+          filterPayload,
+          difficultyBy || undefined,
+        );
+        setResult(r);
+        if (r.ok) setSaved(true); // switches to the batched import runner below
+      }
     });
 
   const fields = probe?.ok
     ? (probe.fields ?? []).filter((f) => !NOISY_IMAGE_PROPS.has(f.prop))
     : null;
+  // date/number fields among the PICKED ones — candidates to rank difficulty by
+  const diffOptions = fieldsFrom(
+    (probe?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind),
+  ).filter((f) => f.kind === "date" || f.kind === "number");
 
   return (
     <div className="glass-card flex flex-col gap-3 p-4">
@@ -416,8 +490,61 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
         </div>
       </details>
 
+      {/* facets: suggested ways to narrow, with counts (click to add a filter) */}
+      {classItems.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="self-start"
+            disabled={loadingFacets}
+            onClick={loadFacets}
+          >
+            {loadingFacets ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            Варіанти звуження
+          </Button>
+          {facets && facets.length === 0 && (
+            <p className="text-[11px] text-muted">Немає підхожих фасетів для цього класу.</p>
+          )}
+          {facets && facets.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg border border-line/60 p-2">
+              {facets.map((f) => (
+                <div key={f.prop} className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-fg">{f.propLabel}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {f.values.map((v) => {
+                      const sel = facetSelected(f.prop, v.qid);
+                      return (
+                        <button
+                          key={v.qid}
+                          type="button"
+                          onClick={() => toggleFacet(f, v)}
+                          className={`rounded-full px-2 py-0.5 text-[11px] transition-colors ${
+                            sel ? "bg-accent text-white" : "bg-accent-soft text-accent hover:bg-accent-soft/70"
+                          }`}
+                        >
+                          {v.label} · {v.count}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted">
+                Клікни варіант — додасться у фільтри. Потім натисни «Розвідка».
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* optional narrowing filters (e.g. citizenship = Ukraine) */}
       <FilterBuilder filters={filters} onChange={setFilters} />
+
+      <label className="flex items-center gap-2 text-xs text-muted">
+        <input type="checkbox" checked={photoOnly} onChange={(e) => setPhotoOnly(e.target.checked)} />
+        Лише айтеми з фото (для візуальних ігор)
+      </label>
 
       <Button size="sm" className="self-start" disabled={probing || classItems.length === 0} onClick={runProbe}>
         {probing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
@@ -531,19 +658,81 @@ export function DatasetSetup({ topicSlug }: { topicSlug: string }) {
             </span>
           </div>
 
+          {/* difficulty ranking */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-fg">Складність рівнів за</span>
+            <select
+              value={difficultyBy}
+              onChange={(e) => setDifficultyBy(e.target.value)}
+              className="h-9 w-full max-w-xs rounded-lg border border-line/60 bg-transparent px-2 text-xs text-fg outline-none focus:border-accent"
+            >
+              <option value="">популярністю (відомі — перші)</option>
+              {diffOptions.map((f) => (
+                <option key={f.role} value={f.role}>
+                  {f.kind === "date" ? "датою" : "числом"}: {f.role} (новіше/більше — легше)
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-muted">
+              За датою: сучасні — легкі рівні, давніші — складніші. Напр. правителі за
+              роком народження.
+            </span>
+          </div>
+
+          {/* CREATE mode: name + icon + category, then create in one step */}
+          {isCreate && (
+            <div className="flex flex-col gap-2 border-t border-line/40 pt-2">
+              <span className="text-xs font-semibold text-fg">Назва датасету</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input placeholder="Назва (EN)" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
+                <Input placeholder="Назва (UK)" value={nameUk} onChange={(e) => setNameUk(e.target.value)} />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <select
+                  value={icon}
+                  onChange={(e) => setIcon(e.target.value)}
+                  className="h-10 rounded-lg border border-line/60 bg-transparent px-2 text-xs text-fg outline-none focus:border-accent"
+                >
+                  {ICON_NAMES.map((i) => (
+                    <option key={i} value={i}>
+                      іконка: {i}
+                    </option>
+                  ))}
+                </select>
+                {categoryOptions && categoryOptions.length > 0 && (
+                  <select
+                    value={catId}
+                    onChange={(e) => setCatId(e.target.value)}
+                    className="h-10 rounded-lg border border-line/60 bg-transparent px-2 text-xs text-fg outline-none focus:border-accent"
+                  >
+                    <option value="">без категорії</option>
+                    {categoryOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          )}
+
           {saved ? (
             <div className="flex flex-col gap-1">
               <span className="text-xs text-success">Конфіг збережено — тягну дані батчами:</span>
-              <ImportRunner topicSlug={topicSlug} autoStart />
+              {topicSlug && <ImportRunner topicSlug={topicSlug} autoStart />}
               <p className="text-[11px] text-muted">
                 Іде по черзі, батч за батчем — не закривай сторінку до завершення.
               </p>
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <Button disabled={pending || picked.size === 0} onClick={submit}>
+              <Button
+                disabled={pending || picked.size === 0 || (isCreate && !nameEn.trim())}
+                onClick={submit}
+              >
                 {pending && <Loader2 size={14} className="animate-spin" />}
-                Зберегти й імпортувати
+                {isCreate ? "Створити датасет" : "Зберегти й імпортувати"}
               </Button>
               {result && !result.ok && <span className="text-xs text-danger">{result.message}</span>}
             </div>

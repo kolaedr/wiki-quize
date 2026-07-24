@@ -36,7 +36,12 @@ export default async function AdminCategoriesPage() {
           style={{ marginLeft: depth * 20 }}
           className="glass-card flex items-center gap-3 p-3 transition-colors hover:border-accent/60"
         >
-          <GameIcon name={c.icon ?? undefined} size={18} />
+          {c.image ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
+            <img src={c.image} alt="" className="h-9 w-12 rounded object-contain" />
+          ) : (
+            <GameIcon name={c.icon ?? undefined} size={18} />
+          )}
           <span className="flex flex-1 flex-col">
             <span className="font-semibold">{resolveText(c.title, "uk")}</span>
             <span className="text-[11px] text-muted">

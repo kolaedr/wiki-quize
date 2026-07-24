@@ -5,7 +5,7 @@ export type Filter = { prop: string; valueQid: string };
 
 const SEARCH_UA =
   process.env.WIKIMEDIA_UA ??
-  "Wiqus/0.1 (https://wiqus.vercel.app; contact) class-search";
+  "WikiQuize/0.1 (https://wikiquize.example; dev) class-search";
 
 export interface ClassCandidate {
   qid: string;
@@ -155,6 +155,74 @@ SELECT (COUNT(DISTINCT ?item) AS ?n) WHERE {
   FILTER(?sl >= ${Math.max(0, Math.floor(sitelinksMin))})
 }`);
   return Number(rows[0]?.n?.value ?? 0);
+}
+
+export interface FacetValue {
+  qid: string;
+  label: string;
+  count: number;
+}
+export interface Facet {
+  prop: string;
+  propLabel: string;
+  values: FacetValue[];
+}
+
+/** Curated "narrowing" properties to offer as facets after a probe. */
+const FACET_PROPS: { prop: string; label: string }[] = [
+  { prop: "P106", label: "рід занять" },
+  { prop: "P39", label: "посада" },
+  { prop: "P27", label: "громадянство" },
+  { prop: "P17", label: "країна" },
+  { prop: "P136", label: "жанр" },
+  { prop: "P641", label: "спорт" },
+];
+
+async function facetOne(
+  classQids: string[],
+  fp: { prop: string; label: string },
+  sitelinksMin: number,
+  filters?: Filter[],
+): Promise<Facet | null> {
+  const rows = await sparqlQuery(`
+SELECT ?v ?vLabel (COUNT(DISTINCT ?item) AS ?n) WHERE {
+  ${classUnion(classQids)}
+  ${filterClauses(filters)}
+  ?item wikibase:sitelinks ?sl .
+  FILTER(?sl >= ${Math.max(0, Math.floor(sitelinksMin))})
+  ?item wdt:${fp.prop} ?v .
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+GROUP BY ?v ?vLabel
+ORDER BY DESC(?n)
+LIMIT 12`);
+  const values = rows
+    .map((r) => ({
+      qid: qidFromUri(r.v?.value ?? ""),
+      label: r.vLabel?.value ?? "",
+      count: Number(r.n?.value ?? 0),
+    }))
+    .filter((x) => QID_RE.test(x.qid) && x.count > 0);
+  return values.length ? { prop: fp.prop, propLabel: fp.label, values } : null;
+}
+
+/**
+ * FACETS: after a probe, suggest HOW to narrow the class — the top values of
+ * common narrowing properties (occupation, citizenship, position…) WITH counts,
+ * so the admin clicks real options instead of guessing QIDs. Each facet prop is
+ * a separate light query; empty ones are dropped.
+ */
+export async function discoverFacets(
+  classQids: string[],
+  sitelinksMin: number,
+  filters?: Filter[],
+): Promise<Facet[]> {
+  const settled = await Promise.allSettled(
+    FACET_PROPS.map((fp) => facetOne(classQids, fp, sitelinksMin, filters)),
+  );
+  return settled
+    .map((r) => (r.status === "fulfilled" ? r.value : null))
+    .filter((f): f is Facet => !!f);
 }
 
 export interface ProbeProperty {

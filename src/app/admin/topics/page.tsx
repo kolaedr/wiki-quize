@@ -8,7 +8,7 @@ import { deleteTopicAction, importPresetAction, resetContentAction } from "@/lib
 import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
 import { CategorySelect } from "@/components/admin/category-controls";
-import { DraftDatasetForm } from "@/components/admin/draft-dataset-form";
+import { DatasetSetup } from "@/components/admin/dataset-setup";
 import { ImportRunner } from "@/components/admin/import-runner";
 import { Button } from "@/components/ui/button";
 
@@ -146,7 +146,7 @@ export default async function AdminTopicsPage() {
         <h2 className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
           Новий датасет
         </h2>
-        <DraftDatasetForm />
+        <DatasetSetup categoryOptions={categoryOptions.map((c) => ({ id: c.id, title: c.title }))} />
       </section>
     </>
   );

@@ -12,10 +12,12 @@ import {
 } from "@/lib/ingest/def";
 import {
   countForClass,
+  discoverFacets,
   discoverFields,
   searchClasses,
   searchProperties,
   type ClassCandidate,
+  type Facet,
   type Filter,
   type ProbeField,
   type PropertyCandidate,
@@ -530,9 +532,38 @@ export async function searchPropertiesAction(query: string): Promise<PropertySea
   }
 }
 
-/** Keep only well-formed { prop: P.., valueQid: Q.. } filters from the client. */
+/**
+ * Keep only well-formed filters. A Qid value = "equals"; an EMPTY value =
+ * "has this property" (the photo toggle uses P18 with no value).
+ */
 function cleanFilters(filters?: Filter[]): Filter[] {
-  return (filters ?? []).filter((f) => /^P\d+$/.test(f?.prop) && /^Q\d+$/.test(f?.valueQid));
+  return (filters ?? []).filter(
+    (f) => /^P\d+$/.test(f?.prop) && (!f?.valueQid || /^Q\d+$/.test(f.valueQid)),
+  );
+}
+
+export interface FacetsResult {
+  ok: boolean;
+  message?: string;
+  facets?: Facet[];
+}
+
+/** Suggested ways to narrow a class (occupation/citizenship/… with counts). */
+export async function probeFacetsAction(
+  classQidsRaw: string,
+  threshold: number,
+  filters?: Filter[],
+): Promise<FacetsResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const classQids = parseQids(classQidsRaw);
+  if (classQids.length === 0 || classQids.some((q) => !/^Q\d+$/.test(q)))
+    return { ok: false, message: "Класи мають бути виду Q3231690" };
+  try {
+    const facets = await discoverFacets(classQids, Number(threshold) || 0, cleanFilters(filters));
+    return { ok: true, facets };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
 }
 
 export interface ProbeResult {
@@ -656,6 +687,68 @@ export async function createDraftTopicAction(
 }
 
 /**
+ * ONE-STEP create: build the dataset straight from the builder with its full
+ * def (class + fields + filters + threshold) already set, then land on its page
+ * for the chunked import. Replaces "empty draft first, configure later".
+ */
+export async function createDatasetAction(input: {
+  titleEn: string;
+  titleUk?: string;
+  icon?: string;
+  categoryId?: string;
+  classQids: string[];
+  sitelinksMin: number;
+  fields: TopicFieldDef[];
+  locales?: string[];
+  filters?: Filter[];
+  difficultyBy?: string;
+}): Promise<CreateDraftResult> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  const titleEn = input.titleEn.trim();
+  if (!titleEn) return { ok: false, message: "Назва (EN) обовʼязкова" };
+  const slug = titleEn
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  if (!/^[a-z0-9-]{2,40}$/.test(slug))
+    return { ok: false, message: "Назва має містити латинські літери/цифри для slug" };
+  if (!input.classQids?.length) return { ok: false, message: "не обрано клас" };
+  if (!input.fields?.length) return { ok: false, message: "не обрано жодного поля" };
+  try {
+    const [exists] = await db.select({ id: topics.id }).from(topics).where(eq(topics.slug, slug)).limit(1);
+    if (exists) return { ok: false, message: `slug "${slug}" вже зайнятий — зміни назву` };
+    const flt = cleanFilters(input.filters);
+    const locs = ["en", ...(input.locales ?? []).filter((l) => l && l !== "en")];
+    const def: TopicDef = {
+      slug,
+      title: { en: titleEn, ...(input.titleUk?.trim() ? { uk: input.titleUk.trim() } : {}) },
+      icon: input.icon || "deck",
+      classQids: input.classQids,
+      sitelinksMin: Number(input.sitelinksMin) || 0,
+      limit: 600,
+      fields: input.fields,
+      locales: locs,
+      ...(flt.length ? { filters: flt } : {}),
+      ...(input.difficultyBy ? { difficultyBy: input.difficultyBy } : {}),
+    };
+    validateDef(def);
+    await db.insert(topics).values({
+      slug,
+      title: def.title,
+      sourceConfig: { def, icon: def.icon },
+      fieldSchema: input.fields.map((f) => ({ role: f.role, kind: f.kind, wikidataProp: f.prop })),
+      status: "draft",
+      ...(input.categoryId ? { categoryId: input.categoryId } : {}),
+    });
+    revalidatePath("/admin");
+    return { ok: true, message: "датасет створено", slug };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/**
  * Save a draft dataset's class + fields (chosen via probe checkboxes) and run
  * the first import. Runs on the dataset page, after createDraftTopicAction.
  */
@@ -666,6 +759,7 @@ export async function setupTopicAction(
   fields: TopicFieldDef[],
   locales: string[] = ["en"],
   filters?: Filter[],
+  difficultyBy?: string,
 ): Promise<ActionResult> {
   if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
   try {
@@ -685,6 +779,7 @@ export async function setupTopicAction(
       fields,
       locales: locs,
       ...(flt.length ? { filters: flt } : {}),
+      ...(difficultyBy ? { difficultyBy } : {}),
     };
     validateDef(def);
     // SAVE config only — the heavy import runs as a batched job (startImportJobAction),

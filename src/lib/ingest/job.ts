@@ -254,11 +254,21 @@ export async function importTick(jobId: string): Promise<JobView> {
       return toView(jobId, "running", next, `батч ${batchIndex}/${cursor.batches.length} · ${next.accepted} айтемів`);
     }
 
-    // finalize
+    // finalize — rank difficulty. By POPULARITY (sitelinks) by default; if the
+    // def picks a date/number field, rank by that (newer/higher value = easier
+    // = level 1). Undated/unranked rows sort as hardest (NULLS FIRST → pr 0).
     const runStart = new Date(cursor.runStartMs);
+    const diffRole =
+      def.difficultyBy &&
+      def.fields.some(
+        (f) => f.role === def.difficultyBy && (f.kind === "date" || f.kind === "number"),
+      )
+        ? def.difficultyBy
+        : null;
+    const orderExpr = diffRole ? sql`(values ->> ${diffRole})::float` : sql`sitelinks`;
     await db.execute(sql`
       WITH ranked AS (
-        SELECT id, percent_rank() OVER (ORDER BY sitelinks ASC) AS pr
+        SELECT id, percent_rank() OVER (ORDER BY ${orderExpr} ASC NULLS FIRST) AS pr
         FROM topic_entities WHERE topic_id = ${topic.id} AND updated_at >= ${runStart}
       )
       UPDATE topic_entities t SET difficulty_score = r.pr FROM ranked r WHERE t.id = r.id`);

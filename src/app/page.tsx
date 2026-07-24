@@ -96,29 +96,37 @@ export default async function Home() {
                   <Link
                     key={c.slug}
                     href={`/category/${c.slug}`}
-                    className="glass-card flex w-36 shrink-0 snap-start flex-col items-center gap-2 p-4 text-center transition-all hover:border-accent active:scale-[0.98]"
+                    className="glass-card flex w-[40vw] max-w-52 shrink-0 snap-start flex-col overflow-hidden transition-all hover:border-accent active:scale-[0.98]"
                   >
-                    {c.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-                      <img src={c.image} alt="" className="h-16 w-[86%] rounded-lg object-contain" />
-                    ) : (
-                      <GameIcon name={c.icon} size={30} box="h-16 w-16" />
-                    )}
-                    <span className="font-semibold leading-tight">{resolveText(c.title, locale)}</span>
-                    <span className="text-xs text-muted">
-                      {t("home.gamesCount", { count: c.gamesCount })}
-                    </span>
+                    <div className="relative aspect-[4/3] w-full bg-accent-soft">
+                      {c.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
+                        <img src={c.image} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-accent">
+                          <GameIcon name={c.icon} size={34} box="h-16 w-16" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-0.5 p-3">
+                      <span className="font-semibold leading-tight">{resolveText(c.title, locale)}</span>
+                      <span className="text-xs text-muted">
+                        {t("home.gamesCount", { count: c.gamesCount })}
+                      </span>
+                    </div>
                   </Link>
                 ))}
               <Link
                 href="/categories"
-                className="glass-card flex w-36 shrink-0 snap-start flex-col items-center justify-center gap-2 p-4 text-center text-accent transition-all hover:border-accent active:scale-[0.98]"
+                className="glass-card flex w-[40vw] max-w-52 shrink-0 snap-start flex-col overflow-hidden text-accent transition-all hover:border-accent active:scale-[0.98]"
               >
-                <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-accent-soft">
-                  <LayoutGrid size={28} />
-                </span>
-                <span className="font-semibold leading-tight">{t("home.allCategories")}</span>
-                <ChevronRight size={15} />
+                <div className="flex aspect-[4/3] w-full items-center justify-center bg-accent-soft">
+                  <LayoutGrid size={40} />
+                </div>
+                <div className="flex items-center gap-1 p-3">
+                  <span className="font-semibold leading-tight">{t("home.allCategories")}</span>
+                  <ChevronRight size={15} />
+                </div>
               </Link>
             </div>
           </section>

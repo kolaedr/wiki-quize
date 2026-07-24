@@ -41,13 +41,29 @@ export interface TopicDef {
    * occupation scientist. Lets a global class (human) be sliced deliberately.
    */
   filters?: { prop: string; valueQid: string }[];
+  /**
+   * How level difficulty is ranked. Undefined = by POPULARITY (sitelinks:
+   * famous first). A field role (of a date/number field) ranks by that value —
+   * for dates, NEWER = easier (level 1), older = harder. E.g. historical figures
+   * ranked by birth year: modern first, ancient last.
+   */
+  difficultyBy?: string;
 }
 
-/** SPARQL AND-clauses for the optional narrowing filters. */
+/**
+ * SPARQL AND-clauses for the optional narrowing filters. A filter with a Qid
+ * requires that exact value (`P27 = Q212`); a filter with an EMPTY valueQid just
+ * requires the property to EXIST (`P18` = "has an image") — that's the photo
+ * toggle, expressed with the same mechanism.
+ */
 export function filterClauses(filters?: { prop: string; valueQid: string }[]): string {
   return (filters ?? [])
-    .filter((f) => /^P\d+$/.test(f.prop) && /^Q\d+$/.test(f.valueQid))
-    .map((f) => `?item wdt:${f.prop} wd:${f.valueQid} .`)
+    .filter((f) => /^P\d+$/.test(f.prop))
+    .map((f, i) =>
+      /^Q\d+$/.test(f.valueQid)
+        ? `?item wdt:${f.prop} wd:${f.valueQid} .`
+        : `?item wdt:${f.prop} ?fx${i} .`,
+    )
     .join("\n  ");
 }
 
@@ -70,7 +86,7 @@ export function validateDef(def: TopicDef) {
   if (!Number.isFinite(def.sitelinksMin) || def.sitelinksMin < 0)
     throw new Error("sitelinksMin must be >= 0");
   for (const f of def.filters ?? [])
-    if (!/^P\d+$/.test(f.prop) || !/^Q\d+$/.test(f.valueQid))
+    if (!/^P\d+$/.test(f.prop) || (f.valueQid && !/^Q\d+$/.test(f.valueQid)))
       throw new Error(`bad filter: ${f.prop}=${f.valueQid}`);
 }
 

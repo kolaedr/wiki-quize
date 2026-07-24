@@ -14,7 +14,7 @@ import {
   type CategoryOption,
 } from "@/components/admin/category-controls";
 import { ActionButton } from "@/components/admin/action-button";
-import { DraftDatasetForm } from "@/components/admin/draft-dataset-form";
+import { DatasetSetup } from "@/components/admin/dataset-setup";
 import { GameAdminCard } from "@/components/admin/game-admin-card";
 import { ItemImagePicker } from "@/components/admin/item-image-picker";
 import { Badge } from "@/components/ui/badge";
@@ -83,7 +83,12 @@ export default async function AdminCategoryPage({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
-          <GameIcon name={cat.icon ?? undefined} size={24} />
+          {cat.image ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
+            <img src={cat.image} alt="" className="h-10 w-14 rounded-lg object-contain" />
+          ) : (
+            <GameIcon name={cat.icon ?? undefined} size={24} />
+          )}
           {resolveText(cat.title, "uk")}
         </h1>
         <div className="flex flex-wrap items-center gap-3">
@@ -145,7 +150,12 @@ export default async function AdminCategoryPage({
             href={`/admin/categories/${c.slug}`}
             className="glass-card flex items-center gap-3 p-3 transition-colors hover:border-accent/60"
           >
-            <GameIcon name={c.icon ?? undefined} size={16} />
+            {c.image ? (
+              // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
+              <img src={c.image} alt="" className="h-8 w-11 rounded object-contain" />
+            ) : (
+              <GameIcon name={c.icon ?? undefined} size={16} />
+            )}
             <span className="flex-1 font-semibold">{resolveText(c.title, "uk")}</span>
             <ChevronRight size={16} className="text-muted" />
           </Link>
@@ -191,7 +201,7 @@ export default async function AdminCategoryPage({
         />
 
         <TogglePanel label="Додати датасет (новий, з Wikidata)">
-          <DraftDatasetForm categoryId={cat.id} />
+          <DatasetSetup categoryId={cat.id} />
         </TogglePanel>
       </section>
 
