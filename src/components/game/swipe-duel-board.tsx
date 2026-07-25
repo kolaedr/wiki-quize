@@ -211,9 +211,9 @@ function ThrowableCard({
         transition={thrown ? { duration: 0.45, ease: [0.2, 0.6, 0.4, 1] } : undefined}
         whileDrag={{ scale: 1.12, rotate: 0, zIndex: 40, cursor: "grabbing" }}
         whileHover={!picked ? { y: -10, scale: 1.04 } : undefined}
-        className={`glass-card relative block aspect-[5/7] w-full cursor-grab p-3 shadow-xl transition-colors ${
+        className={`glass-card relative block aspect-[5/7] w-full cursor-grab p-3 shadow-xl transition-all ${
           state === "correct"
-            ? "border-success shadow-glow"
+            ? "border-success shadow-success ring-2 ring-success"
             : state === "wrong"
               ? "border-danger"
               : state === "dim"

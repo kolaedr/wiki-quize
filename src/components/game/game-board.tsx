@@ -99,7 +99,7 @@ export function GameBoard({ title, cards, onFinish, nextHref, backHref }: Props)
               disabled={!!s.picked}
               className={`glass-card flex min-h-[4.5rem] items-center justify-center px-3 py-3 text-center text-sm font-semibold transition-all active:scale-95 ${
                 state === "correct"
-                  ? "border-success text-success shadow-glow"
+                  ? "border-success text-success shadow-success ring-2 ring-success"
                   : state === "wrong"
                     ? "border-danger text-danger"
                     : state === "dim"
