@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, games, topicEntities, topics } from "@/db/schema";
 import type { LocalizedText } from "@/i18n/locales";
@@ -22,6 +22,9 @@ export interface GameConfig {
   levels: number;
   /** choice: own image attribute (flag/arms/logo) */
   answerRole?: string;
+  /** choice (own attr): force the QUESTION to be the image, options = text —
+   *  in every layout (else duel shows the name and the image is the option). */
+  promptImage?: boolean;
   /** choice over a relation: values[refRole] = [{qid, labels}] */
   refRole?: string;
   /** "parent" = reverse direction: prompt is the ref (brand), options are entities (models) */
@@ -68,6 +71,7 @@ function parseConfig(raw: unknown): GameConfig {
     perLevel: c.perLevel ?? 20,
     levels: c.levels ?? 1,
     answerRole: c.answerRole,
+    promptImage: c.promptImage,
     refRole: c.refRole,
     refDirection: c.refDirection,
     promptImageRole: c.promptImageRole,
@@ -300,8 +304,10 @@ export async function loadGameDecks(
     questions: qWithRole,
     seed: `${slug}-L${lvl}-duel-${seed}`,
     optionCount: 2,
-    prompt: (e) => ({ label: label(e) }),
-    option: (e) => ({ image: image(e) }),
+    // promptImage: show the picture as the QUESTION, options are names (like quad).
+    // Otherwise the classic duel: name is the question, pictures are the options.
+    prompt: (e) => (cfg.promptImage ? { image: image(e) } : { label: label(e) }),
+    option: (e) => (cfg.promptImage ? { label: label(e) } : { image: image(e) }),
   });
   result.quadCards = buildChoiceDeck(withRole, {
     ...base,
@@ -418,12 +424,69 @@ export async function listCategories(): Promise<CatalogEntry[]> {
 
 export const PAGE_SIZE = 10;
 
+export interface CategoryNode {
+  id: string;
+  slug: string;
+  title: LocalizedText;
+  icon?: string;
+  image?: string;
+  parentId: string | null;
+  /** published games across the WHOLE subtree (this category + all descendants) */
+  gamesCount: number;
+}
+
+/**
+ * All categories with SUBTREE game counts — two queries total (categories +
+ * direct game counts), the tree math is in-memory. Parents aggregate their
+ * children so a top-level category reflects everything nested under it.
+ */
+export async function categoryNodes(): Promise<CategoryNode[]> {
+  const [cats, counts] = await Promise.all([
+    db
+      .select({
+        id: categories.id,
+        slug: categories.slug,
+        title: categories.title,
+        icon: categories.icon,
+        image: categories.image,
+        parentId: categories.parentId,
+        sortOrder: categories.sortOrder,
+      })
+      .from(categories)
+      .orderBy(asc(categories.sortOrder)),
+    db
+      .select({ catId: topics.categoryId, n: sql<number>`count(${games.id})::int` })
+      .from(games)
+      .innerJoin(topics, eq(topics.id, games.topicId))
+      .where(eq(games.status, "published"))
+      .groupBy(topics.categoryId),
+  ]);
+  const direct = new Map<string, number>();
+  for (const c of counts) if (c.catId) direct.set(c.catId, c.n);
+  const kids = new Map<string, string[]>();
+  for (const c of cats)
+    if (c.parentId) kids.set(c.parentId, [...(kids.get(c.parentId) ?? []), c.id]);
+  const subtree = (id: string): number =>
+    (direct.get(id) ?? 0) + (kids.get(id) ?? []).reduce((s, cid) => s + subtree(cid), 0);
+  return cats.map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    title: c.title,
+    icon: c.icon ?? undefined,
+    image: c.image ?? undefined,
+    parentId: c.parentId,
+    gamesCount: subtree(c.id),
+  }));
+}
+
 interface CatalogPage {
   title: LocalizedText;
   icon?: string;
   image?: string;
   page: number;
   hasNext: boolean;
+  /** direct subcategories (with subtree counts) — drives the drill-down */
+  children: { slug: string; title: LocalizedText; icon?: string; image?: string; gamesCount: number }[];
   items: {
     slug: string;
     title: LocalizedText;
@@ -455,10 +518,13 @@ export async function loadCategoryPage(slug: string, page = 1): Promise<CatalogP
     .where(eq(categories.slug, slug))
     .limit(1);
   if (cat) {
-    const topicRows = await db
-      .select({ id: topics.id })
-      .from(topics)
-      .where(and(eq(topics.categoryId, cat.id), eq(topics.status, "published")));
+    const [topicRows, nodes] = await Promise.all([
+      db
+        .select({ id: topics.id })
+        .from(topics)
+        .where(and(eq(topics.categoryId, cat.id), eq(topics.status, "published"))),
+      categoryNodes(),
+    ]);
     const ids = topicRows.map((r) => r.id);
     const rows = ids.length
       ? await db
@@ -469,12 +535,17 @@ export async function loadCategoryPage(slug: string, page = 1): Promise<CatalogP
           .limit(PAGE_SIZE + 1)
           .offset((p - 1) * PAGE_SIZE)
       : [];
+    const children = nodes
+      .filter((n) => n.parentId === cat.id)
+      .sort((a, b) => b.gamesCount - a.gamesCount)
+      .map((n) => ({ slug: n.slug, title: n.title, icon: n.icon, image: n.image, gamesCount: n.gamesCount }));
     return {
       title: cat.title,
       icon: cat.icon ?? undefined,
       image: cat.image ?? undefined,
       page: p,
       hasNext: rows.length > PAGE_SIZE,
+      children,
       items: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, config: parseConfig(r.config) })),
     };
   }
@@ -500,6 +571,7 @@ export async function loadCategoryPage(slug: string, page = 1): Promise<CatalogP
     icon: (topic.sourceConfig as { icon?: string })?.icon,
     page: p,
     hasNext: rows.length > PAGE_SIZE,
+    children: [],
     items: rows.slice(0, PAGE_SIZE).map((r) => ({ ...r, config: parseConfig(r.config) })),
   };
 }

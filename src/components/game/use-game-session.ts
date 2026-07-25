@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hapticAnswer } from "@/lib/haptics";
 
-export const FEEDBACK_MS = 1200;
+export const FEEDBACK_MS = 700;
 const LIVES = 3;
 
 export interface AnswerLog {

@@ -47,6 +47,33 @@ export default async function CategoryPage({
           </h1>
         </div>
 
+        {/* subcategories — drill down into nesting before/above the games */}
+        {data.children.length > 0 && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {data.children.map((c) => (
+              <Link
+                key={c.slug}
+                href={`/category/${c.slug}`}
+                className="glass-card flex flex-col items-center gap-2 p-4 text-center transition-all hover:border-accent active:scale-[0.98]"
+              >
+                {c.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
+                  <img src={c.image} alt="" className="h-14 w-[86%] rounded-lg object-contain" />
+                ) : (
+                  <GameIcon name={c.icon} size={30} box="h-14 w-14" />
+                )}
+                <span className="font-semibold leading-tight">{resolveText(c.title, locale)}</span>
+                <span className={`text-xs ${c.gamesCount > 0 ? "text-muted" : "text-accent/70"}`}>
+                  {c.gamesCount > 0
+                    ? t("home.gamesCount", { count: c.gamesCount })
+                    : t("home.comingSoon")}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {data.items.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {data.items.map((g) => (
           <Link
@@ -71,6 +98,7 @@ export default async function CategoryPage({
           </Link>
         ))}
         </div>
+        )}
 
         <Pagination
           page={data.page}

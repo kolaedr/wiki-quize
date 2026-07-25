@@ -40,6 +40,7 @@ export function GameEditor({
   refRole,
   cover,
   icon,
+  promptImage: promptImageInit = false,
   mod = false,
 }: {
   gameId: string;
@@ -57,6 +58,7 @@ export function GameEditor({
   refRole?: string;
   cover?: string;
   icon?: string;
+  promptImage?: boolean;
   /** moderator view: only title + icon (no deck/visual/cover/delete) */
   mod?: boolean;
 }) {
@@ -77,6 +79,7 @@ export function GameEditor({
   const [pRole, setPRole] = useState(promptImageRole ?? "");
   const [iRole, setIRole] = useState(imageRole ?? "");
   const [vRole, setVRole] = useState(valueRole ?? "");
+  const [pImg, setPImg] = useState(promptImageInit);
   const [cov, setCov] = useState<CoverageResult | null>(null);
 
   const isRefChoice = mechanic === "choice" && !!refRole;
@@ -117,9 +120,13 @@ export function GameEditor({
         promptImageRole?: string | null;
         imageRole?: string | null;
         valueRole?: string | null;
+        promptImage?: boolean;
       } = {};
       if (isRefChoice) patch.promptImageRole = pRole || null;
-      if (isOwnChoice) patch.answerRole = aRole || null;
+      if (isOwnChoice) {
+        patch.answerRole = aRole || null;
+        patch.promptImage = pImg;
+      }
       if (isHL) {
         patch.imageRole = iRole || null;
         patch.valueRole = vRole || null;
@@ -200,10 +207,16 @@ export function GameEditor({
               </label>
             )}
             {isOwnChoice && (
-              <label className="flex flex-col gap-1">
-                Зображення-відповідь
-                <RoleSelect value={aRole} onChange={setARole} options={imageFields} />
-              </label>
+              <>
+                <label className="flex flex-col gap-1">
+                  Зображення-відповідь
+                  <RoleSelect value={aRole} onChange={setARole} options={imageFields} />
+                </label>
+                <label className="flex items-center gap-2 pb-2">
+                  <input type="checkbox" checked={pImg} onChange={(e) => setPImg(e.target.checked)} />
+                  Питання — зображення (варіанти = назви)
+                </label>
+              </>
             )}
             {isHL && (
               <>

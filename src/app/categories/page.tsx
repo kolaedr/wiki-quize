@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getLocale, getTranslations } from "next-intl/server";
 import { LayoutGrid } from "lucide-react";
 import { Breadcrumbs } from "@/components/breadcrumbs";
@@ -9,6 +9,7 @@ import { GameIcon } from "@/components/game-icon";
 import { db } from "@/db";
 import { categories, games, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
+import { categoryNodes } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic";
 
@@ -121,21 +122,12 @@ export default async function CategoriesPage({
     );
   }
 
-  // no query → every category, even empty ones ("coming soon")
-  const cats = await db
-    .select({
-      slug: categories.slug,
-      title: categories.title,
-      icon: categories.icon,
-      image: categories.image,
-      gamesCount: sql<number>`count(${games.id})::int`,
-    })
-    .from(categories)
-    .leftJoin(topics, eq(topics.categoryId, categories.id))
-    .leftJoin(games, and(eq(games.topicId, topics.id), eq(games.status, "published")))
-    .groupBy(categories.id)
-    .orderBy(desc(sql`count(${games.id})`), asc(categories.sortOrder))
-    .catch(() => []);
+  // no query → TOP-LEVEL categories only (click drills into subcategories),
+  // sorted by how many published games sit under the whole subtree.
+  const nodes = await categoryNodes().catch(() => []);
+  const cats = nodes
+    .filter((c) => !c.parentId)
+    .sort((a, b) => b.gamesCount - a.gamesCount);
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-5 py-4">

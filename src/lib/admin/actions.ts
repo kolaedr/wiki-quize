@@ -241,6 +241,8 @@ interface VisualPatch {
   promptImageRole?: string | null;
   imageRole?: string | null;
   valueRole?: string | null;
+  /** own-attr choice: question is the image, options are names (all layouts) */
+  promptImage?: boolean;
 }
 
 /**
@@ -272,7 +274,10 @@ export async function setGameVisualAction(
       fields.filter((f) => f.kind === "number" || f.kind === "date").map((f) => f.role),
     );
     const cfg = { ...((g.config ?? {}) as Record<string, unknown>) };
-    const apply = (key: keyof VisualPatch, allowed: Set<string>) => {
+    const apply = (
+      key: "answerRole" | "promptImageRole" | "imageRole" | "valueRole",
+      allowed: Set<string>,
+    ) => {
       const val = patch[key];
       if (val === undefined) return; // not being changed
       if (!val) {
@@ -286,6 +291,10 @@ export async function setGameVisualAction(
     apply("promptImageRole", imageRoles);
     apply("imageRole", imageRoles);
     apply("valueRole", valueRoles);
+    if (patch.promptImage !== undefined) {
+      if (patch.promptImage) cfg.promptImage = true;
+      else delete cfg.promptImage;
+    }
     await db.update(games).set({ config: cfg }).where(eq(games.id, gameId));
     revalidatePath("/admin");
     revalidatePath("/");
@@ -433,10 +442,25 @@ export async function listCategoryItemImagesAction(
       .where(eq(categories.slug, categorySlug))
       .limit(1);
     if (!cat) return { ok: false, message: "категорію не знайдено" };
+    // include this category AND all its descendants — a parent category usually
+    // has no dataset of its own, so its image is picked from subcategory items.
+    const allCats = await db
+      .select({ id: categories.id, parentId: categories.parentId })
+      .from(categories);
+    const childrenOf = new Map<string, string[]>();
+    for (const c of allCats)
+      if (c.parentId) childrenOf.set(c.parentId, [...(childrenOf.get(c.parentId) ?? []), c.id]);
+    const catIds: string[] = [];
+    const stack = [cat.id];
+    while (stack.length) {
+      const id = stack.pop()!;
+      catIds.push(id);
+      stack.push(...(childrenOf.get(id) ?? []));
+    }
     const topicRows = await db
       .select({ id: topics.id })
       .from(topics)
-      .where(eq(topics.categoryId, cat.id));
+      .where(inArray(topics.categoryId, catIds));
     const ids = topicRows.map((t) => t.id);
     if (!ids.length) return { ok: true, items: [] };
     const rows = await db
