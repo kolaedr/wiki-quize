@@ -120,7 +120,7 @@ export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }:
             style={{ x, rotate }}
             onDragEnd={onDragEnd}
             className={`glass-card absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center ${
-              answered ? (wasCorrect ? "border-success shadow-glow" : "border-danger") : ""
+              answered ? (wasCorrect ? "border-success shadow-success ring-2 ring-success" : "border-danger") : ""
             } ${touch ? "cursor-grab active:cursor-grabbing" : ""}`}
           >
             {card.image && !imgFailed ? (
