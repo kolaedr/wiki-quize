@@ -42,6 +42,7 @@ export function GameAdminCard({
     imageRole?: string;
     valueRole?: string;
     refRole?: string;
+    promptImage?: boolean;
   };
   const style = (g.style ?? {}) as { icon?: string; cover?: string };
 
@@ -101,6 +102,7 @@ export function GameAdminCard({
         imageRole={cfg.imageRole}
         valueRole={cfg.valueRole}
         refRole={cfg.refRole}
+        promptImage={cfg.promptImage}
         cover={style.cover}
         icon={style.icon}
         mod={mod}

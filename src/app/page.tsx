@@ -98,10 +98,12 @@ export default async function Home() {
                     href={`/category/${c.slug}`}
                     className="glass-card flex w-[40vw] max-w-52 shrink-0 snap-start flex-col overflow-hidden transition-all hover:border-accent active:scale-[0.98]"
                   >
-                    <div className="relative aspect-[4/3] w-full bg-accent-soft">
+                    <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-accent-soft p-2">
                       {c.image ? (
                         // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-                        <img src={c.image} alt="" className="h-full w-full object-cover" />
+                        // object-contain (not cover) so logos/flags of any ratio show
+                        // whole, with a small pad — cards stay one consistent format
+                        <img src={c.image} alt="" className="h-full w-full object-contain" />
                       ) : (
                         <span className="flex h-full w-full items-center justify-center text-accent">
                           <GameIcon name={c.icon} size={34} box="h-16 w-16" />

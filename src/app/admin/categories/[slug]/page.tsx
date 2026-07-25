@@ -32,11 +32,16 @@ export const maxDuration = 300; // creating a dataset runs an import
 /** Category detail: sub-categories, its datasets, add/attach controls. */
 export default async function AdminCategoryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   await requireSuperPage();
   const { slug } = await params;
+  const { tab: tabParam } = await searchParams;
+  const tab =
+    tabParam === "games" ? "games" : tabParam === "subs" ? "subs" : "datasets";
 
   const [cat] = await db.select().from(categories).where(eq(categories.slug, slug)).limit(1);
   if (!cat) notFound();
@@ -140,7 +145,29 @@ export default async function AdminCategoryPage({
         );
       })()}
 
+      {/* tabs */}
+      <div className="flex gap-1 border-b border-line/60">
+        {(
+          [
+            ["datasets", `Датасети (${myTopics.length})`],
+            ["games", `Ігри (${catGames.length})`],
+            ["subs", `Підкатегорії (${children.length})`],
+          ] as const
+        ).map(([key, label]) => (
+          <Link
+            key={key}
+            href={key === "datasets" ? `/admin/categories/${cat.slug}` : `/admin/categories/${cat.slug}?tab=${key}`}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              tab === key ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg"
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+
       {/* sub-categories */}
+      {tab === "subs" && (
       <section className="flex flex-col gap-2">
         <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
           <FolderTree size={14} /> Підкатегорії
@@ -166,8 +193,10 @@ export default async function AdminCategoryPage({
           <NewCategoryForm presetParentId={cat.id} />
         </TogglePanel>
       </section>
+      )}
 
       {/* datasets of this category */}
+      {tab === "datasets" && (
       <section className="flex flex-col gap-2">
         <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
           <Database size={14} /> Датасети категорії
@@ -206,8 +235,10 @@ export default async function AdminCategoryPage({
           <DatasetSetup categoryId={cat.id} />
         </TogglePanel>
       </section>
+      )}
 
       {/* games across this category's datasets */}
+      {tab === "games" && (
       <section className="flex flex-col gap-2">
         <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
           <Gamepad2 size={14} /> Ігри категорії ({catGames.length})
@@ -223,6 +254,7 @@ export default async function AdminCategoryPage({
           />
         ))}
       </section>
+      )}
     </>
   );
 }

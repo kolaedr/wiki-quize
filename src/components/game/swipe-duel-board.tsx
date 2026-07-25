@@ -67,7 +67,7 @@ export function SwipeDuelBoard({ title, cards, onFinish, nextHref, backHref }: P
       {/* prompt (image + label — e.g. brand logo above the brand name) */}
       <div
         className={`flex flex-col items-center justify-center gap-1 text-center ${
-          card.prompt.image ? "h-40" : "h-24"
+          card.prompt.image ? "h-64" : "h-24"
         }`}
       >
         <AnimatePresence mode="wait">
@@ -76,14 +76,16 @@ export function SwipeDuelBoard({ title, cards, onFinish, nextHref, backHref }: P
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.18 }}
             className="flex flex-col items-center gap-2"
           >
             {card.prompt.image && (
               // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink
+              // big question image: ~80% width so it's actually readable on mobile
               <img
                 src={card.prompt.image}
                 alt=""
-                className="max-h-20 max-w-40 object-contain drop-shadow-lg"
+                className="max-h-52 w-[80vw] max-w-md object-contain drop-shadow-lg"
               />
             )}
             {(card.prompt.label || card.prompt.tmpl) && (
