@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChevronRight, Globe2, LayoutGrid, Play, UserPlus } from "lucide-react";
-import { GameIcon } from "@/components/game-icon";
+import { ChevronRight, Gamepad2, Globe2, HelpCircle, Play, UserPlus } from "lucide-react";
+import { CategoryThumb } from "@/components/category-thumb";
 import { FeedbackBlock } from "@/components/feedback/feedback-block";
 import { InstallAppBlock } from "@/components/install-app-block";
 import { Button } from "@/components/ui/button";
 import { resolveText } from "@/i18n/locales";
 import { auth } from "@/lib/auth";
-import { listCategories } from "@/lib/deck/from-db";
+import { getContentStats, listCategories } from "@/lib/deck/from-db";
+
+/** How many categories the home grid shows (2 cols mobile / 4 desktop). */
+const HOME_CATEGORIES = 8;
 
 export const dynamic = "force-dynamic"; // categories come from the DB
 
@@ -16,10 +19,12 @@ export const dynamic = "force-dynamic"; // categories come from the DB
 export default async function Home() {
   const t = await getTranslations();
   const locale = await getLocale();
-  const [categories, session] = await Promise.all([
+  const [categories, stats, session] = await Promise.all([
     listCategories(),
+    getContentStats(),
     auth.api.getSession({ headers: await headers() }).catch(() => null),
   ]);
+  const nf = new Intl.NumberFormat(locale);
 
   return (
     <>
@@ -84,53 +89,47 @@ export default async function Home() {
                 {t("home.allCategories")}
               </Link>
             </div>
-            {/* horizontal swiper: top categories by game count + an "all" card */}
-            <div
-              className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              data-scrollable
-            >
+            {/* fixed grid of the top categories by game count — 2 cols on phones,
+                4 on desktop. "All categories" stays in the header link above. */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[...categories]
                 .sort((a, b) => b.gamesCount - a.gamesCount)
-                .slice(0, 10)
+                .slice(0, HOME_CATEGORIES)
                 .map((c) => (
                   <Link
                     key={c.slug}
                     href={`/category/${c.slug}`}
-                    className="glass-card flex w-[40vw] max-w-52 shrink-0 snap-start flex-col overflow-hidden transition-all hover:border-accent active:scale-[0.98]"
+                    className="glass-card flex flex-col overflow-hidden transition-all hover:border-accent active:scale-[0.98]"
                   >
-                    <div className="relative flex aspect-[4/3] w-full items-center justify-center bg-accent-soft p-2">
-                      {c.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-                        // object-contain (not cover) so logos/flags of any ratio show
-                        // whole, with a small pad — cards stay one consistent format
-                        <img src={c.image} alt="" className="h-full w-full object-contain" />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-accent">
-                          <GameIcon name={c.icon} size={34} box="h-16 w-16" />
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-0.5 p-3">
-                      <span className="font-semibold leading-tight">{resolveText(c.title, locale)}</span>
+                    <CategoryThumb image={c.image} icon={c.icon} />
+                    <div className="flex flex-1 flex-col gap-0.5 p-3">
+                      <span className="line-clamp-2 font-semibold leading-tight">
+                        {resolveText(c.title, locale)}
+                      </span>
                       <span className="text-xs text-muted">
                         {t("home.gamesCount", { count: c.gamesCount })}
                       </span>
                     </div>
                   </Link>
                 ))}
-              <Link
-                href="/categories"
-                className="glass-card flex w-[40vw] max-w-52 shrink-0 snap-start flex-col overflow-hidden text-accent transition-all hover:border-accent active:scale-[0.98]"
-              >
-                <div className="flex aspect-[4/3] w-full items-center justify-center bg-accent-soft">
-                  <LayoutGrid size={40} />
-                </div>
-                <div className="flex items-center gap-1 p-3">
-                  <span className="font-semibold leading-tight">{t("home.allCategories")}</span>
-                  <ChevronRight size={15} />
-                </div>
-              </Link>
             </div>
+
+            {/* slim stats bar: how much there actually is to play right now */}
+            {(stats.items > 0 || stats.games > 0) && (
+              <div className="glass-card flex items-center justify-center gap-4 px-4 py-2.5 text-xs sm:gap-6">
+                <span className="flex items-center gap-1.5">
+                  <HelpCircle size={14} className="shrink-0 text-accent" />
+                  <span className="font-semibold text-fg">{nf.format(stats.items)}</span>
+                  <span className="text-muted">{t("home.statsQuestions")}</span>
+                </span>
+                <span className="h-4 w-px bg-line" aria-hidden />
+                <span className="flex items-center gap-1.5">
+                  <Gamepad2 size={14} className="shrink-0 text-accent" />
+                  <span className="font-semibold text-fg">{nf.format(stats.games)}</span>
+                  <span className="text-muted">{t("home.statsGames")}</span>
+                </span>
+              </div>
+            )}
           </section>
         ) : (
           <div className="flex flex-col items-center gap-4">
