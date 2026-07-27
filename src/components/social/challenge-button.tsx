@@ -34,7 +34,7 @@ export function ChallengeButton({ gameSlug }: { gameSlug: string }) {
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <Button size="sm" variant="glass" disabled={pending} onClick={make}>
+      <Button size="lg" variant="glass" disabled={pending} onClick={make}>
         {pending ? <Loader2 size={14} className="animate-spin" /> : <Swords size={14} />}
         {t("challengeCta")}
       </Button>

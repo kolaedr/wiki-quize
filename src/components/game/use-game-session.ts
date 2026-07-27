@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hapticAnswer } from "@/lib/haptics";
+import { useGame } from "@/stores/game";
 
 export const FEEDBACK_MS = 700;
 const LIVES = 3;
@@ -30,10 +31,20 @@ export function useGameSession(
   const [score, setScore] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [over, setOver] = useState(false);
+  // per-card outcome in order — drives the segmented bottom progress bar
+  const [results, setResults] = useState<boolean[]>([]);
   const answersRef = useRef<AnswerLog[]>([]);
   const reportedRef = useRef(false);
 
   const done = over || idx >= totalCards;
+
+  // Mirror the session into the global store so the chrome OUTSIDE the board
+  // (header lives, bottom progress bar) can render it without prop drilling
+  // through three different board components.
+  const syncGame = useGame((s) => s.sync);
+  useEffect(() => {
+    syncGame({ idx, total: totalCards, lives, maxLives: LIVES, results });
+  }, [syncGame, idx, totalCards, lives, results]);
 
   // Report the finished session exactly once (games in the DB get persisted)
   useEffect(() => {
@@ -48,6 +59,7 @@ export function useGameSession(
       if (picked || done) return false;
       setPicked(key);
       answersRef.current.push({ key, correct });
+      setResults((r) => [...r, correct]);
       hapticAnswer(correct); // vibration on mobile (Android; iOS has no API)
       let willEnd = false;
       if (correct) {
@@ -80,9 +92,22 @@ export function useGameSession(
     setScore(0);
     setPicked(null);
     setOver(false);
+    setResults([]);
     answersRef.current = [];
     reportedRef.current = false;
   }, []);
 
-  return { idx, lives, maxLives: LIVES, streak, best, score, picked, done, answer, restart };
+  return {
+    idx,
+    lives,
+    maxLives: LIVES,
+    streak,
+    best,
+    score,
+    picked,
+    done,
+    results,
+    answer,
+    restart,
+  };
 }
