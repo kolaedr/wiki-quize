@@ -16,6 +16,7 @@ import {
   discoverFacets,
   discoverFields,
   humansWithRole,
+  resolveLabels,
   searchClasses,
   searchProperties,
   type ClassCandidate,
@@ -548,6 +549,22 @@ export async function searchClassesAction(query: string): Promise<ClassSearchRes
   if (!query.trim()) return { ok: true, classes: [] };
   try {
     return { ok: true, classes: await searchClasses(query) };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/**
+ * Labels for ids the form already holds (reopening a saved config shows
+ * "human (Q5)" instead of a bare QID). Never fatal — on failure the UI just
+ * keeps showing the ids.
+ */
+export async function resolveLabelsAction(
+  ids: string[],
+): Promise<{ ok: boolean; labels?: Record<string, string>; message?: string }> {
+  if (!(await getAdminSession())) return { ok: false, message: "forbidden" };
+  try {
+    return { ok: true, labels: await resolveLabels(ids) };
   } catch (err) {
     return { ok: false, message: dbError(err) };
   }
