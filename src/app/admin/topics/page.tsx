@@ -1,40 +1,128 @@
 import Link from "next/link";
-import { asc, sql } from "drizzle-orm";
-import { Database, Rows3 } from "lucide-react";
+import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { Database, RefreshCw, Rows3, Settings2 } from "lucide-react";
 import { db } from "@/db";
-import { categories, topicEntities, topics } from "@/db/schema";
+import { categories, games, topicEntities, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
 import { deleteTopicAction, importPresetAction, resetContentAction } from "@/lib/admin/actions";
 import { PRESETS } from "@/lib/ingest/presets";
 import { ActionButton } from "@/components/admin/action-button";
 import { CategorySelect } from "@/components/admin/category-controls";
 import { DatasetSetup } from "@/components/admin/dataset-setup";
-import { ImportRunner } from "@/components/admin/import-runner";
+import { TopicsFilter } from "@/components/admin/topics-filter";
+import { Pagination } from "@/components/pagination";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireSuperPage } from "@/lib/admin/guard";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // imports run inside server actions
+export const maxDuration = 300; // legacy preset imports still run inline here
 
-/** Topics: import / resync by click, plus the no-code topic builder. */
-export default async function AdminTopicsPage() {
+const PAGE = 20;
+const STATUSES = ["draft", "syncing", "ready", "published", "disabled"] as const;
+
+/**
+ * Datasets INDEX — paginated + searchable list, nothing more.
+ *
+ * Deliberately dumb rows: no import runner, no per-row client component that
+ * hits the server on mount. Everything a row needs comes from three fixed
+ * queries (page of topics + one grouped count per list), so the request count
+ * is constant no matter how many datasets exist. Sync/progress lives on the
+ * dataset page (`/admin/topics/[slug]?tab=sync`).
+ */
+export default async function AdminTopicsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; q?: string; status?: string }>;
+}) {
   await requireSuperPage();
-  const [topicRows, counts, categoryRows] = await Promise.all([
-    db.select().from(topics).catch(() => []),
-    db
-      .select({ topicId: topicEntities.topicId, n: sql<number>`count(*)::int` })
-      .from(topicEntities)
-      .groupBy(topicEntities.topicId)
-      .catch(() => []),
+  const { page: pageParam, q: qParam, status: statusParam } = await searchParams;
+  const page = Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1);
+  const q = (qParam ?? "").trim();
+  const status = STATUSES.includes(statusParam as (typeof STATUSES)[number])
+    ? (statusParam as (typeof STATUSES)[number])
+    : null;
+
+  // search matches slug OR any localised title (jsonb → text is enough here)
+  const where = and(
+    q
+      ? or(ilike(topics.slug, `%${q}%`), sql`${topics.title}::text ilike ${`%${q}%`}`)
+      : undefined,
+    status ? eq(topics.status, status) : undefined,
+  );
+
+  // QUERY 1 — one page of datasets, explicit columns only (no big jsonb blobs;
+  // `configured` is computed in SQL instead of shipping sourceConfig over).
+  const rows = await db
+    .select({
+      id: topics.id,
+      slug: topics.slug,
+      title: topics.title,
+      status: topics.status,
+      categoryId: topics.categoryId,
+      syncedAt: topics.syncedAt,
+      configured: sql<boolean>`(
+        ${topics.sourceConfig}->'preset' is not null
+        or (
+          jsonb_typeof(${topics.sourceConfig}->'def'->'fields') = 'array'
+          and jsonb_array_length(${topics.sourceConfig}->'def'->'fields') > 0
+        )
+      )`,
+    })
+    .from(topics)
+    .where(where)
+    .orderBy(desc(topics.createdAt))
+    .limit(PAGE + 1)
+    .offset((page - 1) * PAGE)
+    .catch(() => []);
+
+  const hasNext = rows.length > PAGE;
+  const pageRows = rows.slice(0, PAGE);
+  const ids = pageRows.map((t) => t.id);
+
+  // QUERIES 2–4 — aggregates for THIS PAGE only, one grouped query each.
+  const [entityCounts, gameCounts, categoryRows] = await Promise.all([
+    ids.length
+      ? db
+          .select({ topicId: topicEntities.topicId, n: sql<number>`count(*)::int` })
+          .from(topicEntities)
+          .where(inArray(topicEntities.topicId, ids))
+          .groupBy(topicEntities.topicId)
+          .catch(() => [])
+      : Promise.resolve([]),
+    ids.length
+      ? db
+          .select({ topicId: games.topicId, n: sql<number>`count(*)::int` })
+          .from(games)
+          .where(inArray(games.topicId, ids))
+          .groupBy(games.topicId)
+          .catch(() => [])
+      : Promise.resolve([]),
     db.select().from(categories).orderBy(asc(categories.sortOrder)).catch(() => []),
   ]);
-  const countByTopic = new Map(counts.map((c) => [c.topicId, c.n]));
-  const topicBySlug = new Map(topicRows.map((t) => [t.slug, t]));
+
+  const entityByTopic = new Map(entityCounts.map((c) => [c.topicId, c.n]));
+  const gamesByTopic = new Map(gameCounts.map((c) => [c.topicId, c.n]));
   const categoryOptions = categoryRows.map((c) => ({
     id: c.id,
     slug: c.slug,
     title: resolveText(c.title, "uk"),
   }));
+
+  // legacy presets that were never imported — only on a clean first page
+  const knownSlugs = new Set(pageRows.map((t) => t.slug));
+  const missingPresets =
+    page === 1 && !q && !status
+      ? Object.values(PRESETS).filter((p) => !knownSlugs.has(p.slug))
+      : [];
+
+  const href = (p: number) => {
+    const s = new URLSearchParams();
+    if (q) s.set("q", q);
+    if (status) s.set("status", status);
+    if (p > 1) s.set("page", String(p));
+    return `/admin/topics${s.toString() ? `?${s.toString()}` : ""}`;
+  };
 
   return (
     <>
@@ -51,98 +139,81 @@ export default async function AdminTopicsPage() {
         />
       </div>
 
-      <p className="text-xs text-muted">
-        Категорії — в окремому розділі. Тут признач датасету категорію у випадайці
-        поруч, або створюй/додавай датасети зсередини категорії.
-      </p>
+      <TopicsFilter q={q} status={status ?? "all"} />
 
-      <section className="flex flex-col gap-3">
-        {[
-          ...topicRows.map((t) => ({
-            slug: t.slug,
-            title: t.title,
-            topic: t,
-            importKey: (t.sourceConfig as { preset?: string })?.preset ?? t.slug,
-          })),
-          ...Object.values(PRESETS)
-            .filter((p) => !topicBySlug.has(p.slug))
-            .map((p) => ({ slug: p.slug, title: p.title, topic: null, importKey: p.key })),
-        ].map(({ slug, title, topic, importKey }) => {
-          const report = topic?.validationReport as
-            | {
-                accepted?: number;
-                totalExisting?: number;
-                fieldCoverage?: Record<string, number>;
-              }
-            | null
-            | undefined;
-          // builder (def) datasets sync via the CHUNKED runner (25-item batches,
-          // never hangs); only legacy presets use the single-request path.
-          const isDef = !!(
-            topic?.sourceConfig as { def?: { fields?: unknown[] } } | null
-          )?.def?.fields?.length;
-          return (
-            <div key={slug} className="glass-card flex flex-col gap-2 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{resolveText(title, "uk")}</p>
-                  <p className="text-xs text-muted">
-                    {topic
-                      ? `${topic.status} · ${countByTopic.get(topic.id) ?? 0} сутностей · синк: ${
-                          topic.syncedAt ? new Date(topic.syncedAt).toLocaleString("uk-UA") : "—"
-                        }`
-                      : "ще не імпортовано"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {topic && (
-                    <CategorySelect
-                      topicSlug={slug}
-                      categoryId={topic.categoryId}
-                      options={categoryOptions}
-                    />
-                  )}
-                  {topic && (
-                    <Button asChild size="sm" variant="ghost">
-                      <Link href={`/admin/topics/${slug}`}>
-                        <Rows3 size={13} /> Айтеми
-                      </Link>
-                    </Button>
-                  )}
-                  {topic && isDef ? (
-                    <ImportRunner topicSlug={slug} label="Синхронізувати" />
-                  ) : (
-                    <ActionButton
-                      label={topic ? "Синхронізувати" : "Імпортувати"}
-                      action={importPresetAction.bind(null, importKey)}
-                    />
-                  )}
-                  {topic && (
-                    <ActionButton
-                      variant="ghost"
-                      confirm
-                      iconOnly
-                      icon="trash"
-                      label="Видалити датасет"
-                      action={deleteTopicAction.bind(null, slug)}
-                    />
-                  )}
-                </div>
-              </div>
-              {report?.fieldCoverage && (
-                <p className="text-[11px] leading-4 text-muted">
-                  {report.totalExisting != null &&
-                    `Отримано ${report.accepted ?? 0} з ${report.totalExisting} існуючих · `}
-                  Покриття полів:{" "}
-                  {Object.entries(report.fieldCoverage)
-                    .map(([k, v]) => `${k} ${v}`)
-                    .join(" · ")}
-                </p>
-              )}
+      <section className="flex flex-col gap-2">
+        {pageRows.length === 0 && (
+          <p className="text-sm text-muted">
+            {q || status ? "Нічого не знайдено." : "Датасетів ще немає."}
+          </p>
+        )}
+
+        {pageRows.map((t) => (
+          <div key={t.id} className="glass-card flex flex-wrap items-center gap-3 p-3">
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/admin/topics/${t.slug}`}
+                className="font-semibold transition-colors hover:text-accent"
+              >
+                {resolveText(t.title, "uk")}
+              </Link>
+              <p className="truncate text-xs text-muted">
+                {t.slug} · {entityByTopic.get(t.id) ?? 0} сутностей ·{" "}
+                {gamesByTopic.get(t.id) ?? 0} ігор · синк:{" "}
+                {t.syncedAt ? new Date(t.syncedAt).toLocaleDateString("uk-UA") : "—"}
+              </p>
             </div>
-          );
-        })}
+
+            {!t.configured && <Badge variant="muted">не налаштовано</Badge>}
+            <Badge variant={t.status === "published" ? "success" : "muted"}>{t.status}</Badge>
+
+            <CategorySelect topicSlug={t.slug} categoryId={t.categoryId} options={categoryOptions} />
+
+            <Button asChild size="sm" variant="ghost">
+              <Link href={`/admin/topics/${t.slug}`}>
+                {t.configured ? <Rows3 size={13} /> : <Settings2 size={13} />}
+                {t.configured ? "Айтеми" : "Налаштувати"}
+              </Link>
+            </Button>
+
+            {t.configured && (
+              <Button asChild size="sm" variant="ghost">
+                <Link href={`/admin/topics/${t.slug}?tab=sync`}>
+                  <RefreshCw size={13} /> Синк
+                </Link>
+              </Button>
+            )}
+
+            <ActionButton
+              variant="ghost"
+              confirm
+              iconOnly
+              icon="trash"
+              label="Видалити датасет"
+              action={deleteTopicAction.bind(null, t.slug)}
+            />
+          </div>
+        ))}
+
+        <Pagination page={page} hasNext={hasNext} makeHref={href} />
       </section>
+
+      {missingPresets.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
+            Legacy-пресети (ще не імпортовані)
+          </h2>
+          {missingPresets.map((p) => (
+            <div key={p.slug} className="glass-card flex items-center justify-between gap-3 p-3">
+              <div>
+                <p className="font-semibold">{resolveText(p.title, "uk")}</p>
+                <p className="text-xs text-muted">{p.slug} · ще не імпортовано</p>
+              </div>
+              <ActionButton label="Імпортувати" action={importPresetAction.bind(null, p.key)} />
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-xs font-semibold uppercase tracking-wide text-muted">
