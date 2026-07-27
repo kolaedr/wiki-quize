@@ -59,17 +59,27 @@ export function ImportRunner({
     if (created.current) return;
     let cancelled = false;
     (async () => {
-      // resume an in-progress queue from the DB on load (shows ticked batches)
+      // on mount, pull the newest job from the DB so the queue shows up as soon
+      // as the tab opens (with its ticked-off batches) instead of a bare button
       const latest = await getLatestJobAction(topicSlug);
       if (cancelled || created.current) return;
+      // an in-progress queue always resumes (running or mid-finalize)
       if (latest && !latest.done) {
         created.current = true;
         setView(latest);
         return;
       }
+      // autoStart (dataset setup) kicks a fresh import even if an old one finished
       if (autoStart) {
         created.current = true;
         createJob();
+        return;
+      }
+      // otherwise (e.g. the Sync tab) show the LAST queue, done or not — so a
+      // finished run stays visible (read-only) with ↻ to start a new one
+      if (latest) {
+        created.current = true;
+        setView(latest);
       }
     })();
     return () => {
