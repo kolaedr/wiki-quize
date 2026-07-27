@@ -59,6 +59,7 @@ export const auth = betterAuth({
         type: "string",
         defaultValue: "user",
         input: false, // never settable from the client
+        returned: true,
       },
     },
   },

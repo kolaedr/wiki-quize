@@ -1,5 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { user as userTable } from "@/db/auth-schema";
 import { auth } from "@/lib/auth";
 
 /**
@@ -20,9 +23,9 @@ async function currentSession(): Promise<NonNullable<SessionLike> | null> {
   return session ?? null;
 }
 
-/** Which staff level (if any) this session's user has. */
-function levelOf(user: { role?: string; email: string }): StaffLevel | null {
-  const role = user.role;
+/** Which staff level (if any) this user has (role + email from DB when possible). */
+function levelOf(user: { role?: string | null; email: string }): StaffLevel | null {
+  const role = user.role ?? undefined;
   const allowlist = (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
@@ -32,6 +35,19 @@ function levelOf(user: { role?: string; email: string }): StaffLevel | null {
   return null;
 }
 
+async function staffUserFromSession(session: NonNullable<SessionLike>) {
+  const row = await db
+    .select({ role: userTable.role, email: userTable.email })
+    .from(userTable)
+    .where(eq(userTable.id, session.user.id))
+    .then((r) => r[0]);
+
+  return {
+    role: row?.role ?? session.user.role,
+    email: row?.email ?? session.user.email,
+  };
+}
+
 /**
  * SUPER-ADMIN gate (unchanged contract): returns the session only for supers.
  * Every generation / dataset / user-management action uses this.
@@ -39,7 +55,8 @@ function levelOf(user: { role?: string; email: string }): StaffLevel | null {
 export async function getAdminSession() {
   const session = await currentSession();
   if (!session) return null;
-  return levelOf(session.user) === "super" ? session : null;
+  const user = await staffUserFromSession(session);
+  return levelOf(user) === "super" ? session : null;
 }
 
 /** Any staff member (super OR moderator) + their level. Null for everyone else. */
@@ -48,7 +65,8 @@ export async function getStaff(): Promise<
 > {
   const session = await currentSession();
   if (!session) return null;
-  const level = levelOf(session.user);
+  const user = await staffUserFromSession(session);
+  const level = levelOf(user);
   return level ? { session, level } : null;
 }
 
