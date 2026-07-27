@@ -11,6 +11,7 @@ import { user } from "@/db/auth-schema";
 import { GameIcon } from "@/components/game-icon";
 import { Pagination } from "@/components/pagination";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { AccountPreferences } from "@/components/account-preferences";
 import { resolveText } from "@/i18n/locales";
 import { auth } from "@/lib/auth";
 import { PAGE_SIZE } from "@/lib/deck/from-db";
@@ -119,6 +120,8 @@ export default async function MePage({
             </div>
           </div>
         </div>
+
+        <AccountPreferences />
 
         {/* teams entry */}
         <Link

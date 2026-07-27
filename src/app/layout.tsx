@@ -1,10 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { cookies, headers } from "next/headers";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { LocalePickerDialog } from "@/components/locale-picker-dialog";
 import { SwRegister } from "@/components/sw-register";
+import { isLocale, LOCALE_COOKIE } from "@/i18n/locales";
+import { getSuggestedLocale } from "@/lib/locale-cookie";
 // Self-hosted variable fonts (no runtime Google Fonts dependency)
 import "@fontsource-variable/manrope"; // includes latin + cyrillic subsets
 import "@fontsource-variable/space-grotesk";
@@ -61,6 +65,10 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const locale = await getLocale();
   const messages = await getMessages();
+  const store = await cookies();
+  const needsLocalePick = !isLocale(store.get(LOCALE_COOKIE)?.value);
+  const headerStore = await headers();
+  const suggestedLocale = getSuggestedLocale(headerStore.get("accept-language"));
 
   return (
     <html lang={locale} suppressHydrationWarning className="antialiased">
@@ -80,6 +88,7 @@ export default async function RootLayout({
               <SiteFooter />
             </div>
             <SwRegister />
+            <LocalePickerDialog open={needsLocalePick} suggested={suggestedLocale} />
           </NextIntlClientProvider>
         </ThemeProvider>
       </body>

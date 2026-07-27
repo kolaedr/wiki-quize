@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Shield } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { UserButton } from "@/components/auth/user-button";
 
 /**
@@ -33,7 +32,6 @@ export function SiteHeaderInner({ admin }: { admin: boolean }) {
           </Link>
         )}
         <UserButton />
-        <ThemeToggle />
       </div>
     </header>
   );
