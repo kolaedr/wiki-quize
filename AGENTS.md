@@ -112,6 +112,12 @@ Cloud agents run on an isolated Ubuntu VM. Configuration lives in [`.cursor/envi
 
 Always finish with `npm run lint` and `npm run build` before opening a PR.
 
+### Known caveats
+
+- `npm run lint` currently reports **pre-existing** errors (mostly `react-hooks/set-state-in-effect`, e.g. `src/lib/use-coarse-pointer.ts`, `src/components/theme-toggle.tsx`). They are unrelated to most tasks — focus on not adding *new* lint errors rather than a clean exit code.
+- `next build` (Next 16) does **not** fail on those ESLint errors; a green build means TypeScript + compilation passed.
+- `npm run db:seed` validates every flag/logo image URL against Wikimedia before inserting (~1 min, network-bound); a built-in meta-guard trusts all URLs if validation looks rate-limited. Migrations and seeds are idempotent (upsert by slug), safe to re-run.
+
 ---
 
 ## GitHub integration (if repo is not visible in Cloud Agents)
