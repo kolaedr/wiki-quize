@@ -53,6 +53,29 @@ export const auth = betterAuth({
         },
       }
     : undefined,
+  account: {
+    /**
+     * Link a Google sign-in to an EXISTING account with the same email instead
+     * of refusing with `account_not_linked`.
+     *
+     * Two flags are needed, not one. `trustedProviders` covers the incoming
+     * side (we trust Google's verified email). But Better Auth also checks the
+     * LOCAL user with `requireLocalEmailVerified`, which defaults to true — and
+     * this app has no email-verification flow at all, so every existing user
+     * has emailVerified = false and linking would still be refused.
+     *
+     * Trade-off: someone who registered locally with an email they don't own
+     * would absorb the real owner's Google sign-in. Bounded here — sign-up is
+     * nick-based, email is optional and usually synthetic
+     * (nick@users.wikiquize.app) — but the proper fix is verifying emails, at
+     * which point requireLocalEmailVerified should go back to true.
+     */
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google"],
+      requireLocalEmailVerified: false,
+    },
+  },
   user: {
     additionalFields: {
       role: {
