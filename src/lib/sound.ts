@@ -69,9 +69,13 @@ function tone(
 
 /**
  * Correct: a bright rising third (E6 → B6), like a coin pickup.
- * Wrong: one short low tone sliding down — deliberately soft rather than a
- * harsh buzzer, since the main tester is a child and a game should not feel
- * punishing when you miss.
+ *
+ * Wrong: two descending square-wave notes (A4 → E4) plus a sine an octave
+ * below for body. The first attempt was a soft low sine and it was inaudible
+ * on a phone: small speakers roll off hard under ~300 Hz, and a pure sine has
+ * no harmonics to survive that. A square wave keeps energy in the midrange
+ * where phone speakers actually work, and two steps read as "wrong" instead of
+ * a click. Still not a harsh buzzer — the tester is a child.
  */
 export function playAnswer(correct: boolean) {
   const c = audio();
@@ -82,7 +86,11 @@ export function playAnswer(correct: boolean) {
       tone(c, { freq: 1318.5, start: t0, duration: 0.09, type: "triangle" });
       tone(c, { freq: 1975.5, start: t0 + 0.075, duration: 0.16, type: "triangle" });
     } else {
-      tone(c, { freq: 220, to: 130, start: t0, duration: 0.24, type: "sine", volume: 0.14 });
+      // step down, each note held long enough to register
+      tone(c, { freq: 440, start: t0, duration: 0.17, type: "square", volume: 0.13 });
+      tone(c, { freq: 329.6, start: t0 + 0.15, duration: 0.34, type: "square", volume: 0.13 });
+      // sub-octave sine fills it out on speakers that can reproduce it
+      tone(c, { freq: 164.8, to: 110, start: t0 + 0.15, duration: 0.36, type: "sine", volume: 0.1 });
     }
   } catch {
     // audio is a nicety — never let it break answering

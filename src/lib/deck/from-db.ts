@@ -30,6 +30,13 @@ export interface GameConfig {
   promptShow?: "text" | "image" | "both";
   /** how each ANSWER option renders: text | image | both */
   optionShow?: "text" | "image" | "both";
+  /**
+   * Blur radius (px) applied to the QUESTION image until it's answered — many
+   * pictures give the answer away at a glance (a flag, a distinctive logo), so
+   * the admin can make the round about recognition instead of reading.
+   * 0/undefined = off.
+   */
+  promptBlur?: number;
   /** choice over a relation: values[refRole] = [{qid, labels}] */
   refRole?: string;
   /** "parent" = reverse direction: prompt is the ref (brand), options are entities (models) */
@@ -79,6 +86,7 @@ function parseConfig(raw: unknown): GameConfig {
     promptImage: c.promptImage,
     promptShow: c.promptShow,
     optionShow: c.optionShow,
+    promptBlur: c.promptBlur,
     refRole: c.refRole,
     refDirection: c.refDirection,
     promptImageRole: c.promptImageRole,

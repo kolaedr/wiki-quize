@@ -11,7 +11,7 @@ import { useTranslations } from "next-intl";
 import { ImageOff } from "lucide-react";
 import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
-import { ResultScreen, StreakBadge } from "./hud";
+import { blurStyle, ResultScreen, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
 const THROW_DISTANCE = 110;
@@ -23,6 +23,7 @@ interface Props {
   onFinish?: (r: SessionResult) => void;
   nextHref?: string;
   backHref?: string;
+  promptBlur?: number;
 }
 
 /**
@@ -31,7 +32,7 @@ interface Props {
  * throw it (distance or flick velocity) to pick it — it flies off with
  * your throw's momentum. Tap/click also picks. Keyboard: ← →.
  */
-export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref }: Props) {
+export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
@@ -85,6 +86,7 @@ export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref }: Props) {
               <img
                 src={card.prompt.image}
                 alt=""
+                style={blurStyle(promptBlur, !!s.picked)}
                 className="max-h-52 w-[80vw] max-w-md object-contain drop-shadow-lg"
               />
             )}

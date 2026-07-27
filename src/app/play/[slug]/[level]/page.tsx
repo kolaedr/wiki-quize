@@ -52,6 +52,7 @@ export default async function GameLevelPage({
       slug={decks.slug}
       level={decks.level}
       levels={decks.config.levels}
+      promptBlur={decks.config.promptBlur}
       backHref={`/play/${decks.slug}`}
     />
   );
