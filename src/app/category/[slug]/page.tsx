@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { GameIcon } from "@/components/game-icon";
+import { GameTitleEditButton } from "@/components/admin/game-title-edit-button";
 import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
+import { getStaff } from "@/lib/admin/guard";
 import { loadCategoryPage } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,10 @@ export default async function CategoryPage({
     data = null;
   }
   if (!data) notFound();
+
+  // staff (super or moderator) get an inline rename pencil on each card —
+  // the page is force-dynamic, so this is evaluated per request
+  const canEdit = !!(await getStaff());
 
   return (
     <>
@@ -76,10 +82,10 @@ export default async function CategoryPage({
         {data.items.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {data.items.map((g) => (
+          <div key={g.slug} className="relative">
           <Link
-            key={g.slug}
             href={`/play/${g.slug}`}
-            className="glass-card flex flex-col items-center gap-2.5 p-3 text-center transition-all hover:border-accent active:scale-[0.98]"
+            className="glass-card flex h-full flex-col items-center gap-2.5 p-3 text-center transition-all hover:border-accent active:scale-[0.98]"
           >
             {(g.style as { cover?: string })?.cover ? (
               // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
@@ -96,6 +102,14 @@ export default async function CategoryPage({
               {t("levels.count", { levels: g.config.levels })}
             </span>
           </Link>
+          {canEdit && (
+            <GameTitleEditButton
+              slug={g.slug}
+              title={g.title}
+              className="absolute right-1.5 top-1.5"
+            />
+          )}
+          </div>
         ))}
         </div>
         )}
