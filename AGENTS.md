@@ -9,7 +9,7 @@ Repo: `kolaedr/wiki-quize` · Docs: [`docs/PROJECT.md`](./docs/PROJECT.md) (EN) 
 
 ## ⛔ Agent operating rules (MUST follow — read first)
 
-1. **Branching.** Work on the **`dev`** branch. **Never** push or merge to **`main`** unless the user has **explicitly** told you to in that request. Default base branch for any PR is `dev`.
+1. **Branching.** Create a **separate branch per task** and open the PR against **`dev`**. Do **not** commit directly on `dev` or `main`. **Never** merge into `main` — the user performs the `dev` → `main` merge themselves. Default base branch for every PR is `dev`.
 2. **Seeds are opt-in and destructive.** Run `npm run db:seed` / `npm run db:seed:categories` **only** when the user explicitly asks. `db:seed` deletes & replaces `topic_entities` for the `countries`/`car-brands`/`car-models` slugs and overwrites `limits`, starter game configs, and category metadata — it will damage a real DB.
 3. **Migrations require confirmation.** Before running `npm run db:migrate`, **ask the user first** and state in writing whether the pending migration is non-destructive (won't drop/alter existing data). Only run after they approve.
 
