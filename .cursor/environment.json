@@ -1,0 +1,10 @@
+{
+  "install": "npm install",
+  "start": "",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "npm run dev"
+    }
+  ]
+}
