@@ -33,7 +33,8 @@
   },
   "footer": {
     "portfolio": "Портфоліо",
-    "language": "Мова"
+    "language": "Мова",
+    "admin": "Адмін-панель"
   },
   "me": {
     "played": "Зіграно ігор",
