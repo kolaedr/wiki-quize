@@ -11,6 +11,7 @@ import {
   buildSingleAttrDeck,
   buildSingleRefDeck,
   refsOf,
+  showVisual,
 } from "./build";
 import type { BinaryCard, ChoiceCard, DeckEntity } from "./types";
 
@@ -25,6 +26,10 @@ export interface GameConfig {
   /** choice (own attr): force the QUESTION to be the image, options = text —
    *  in every layout (else duel shows the name and the image is the option). */
   promptImage?: boolean;
+  /** how the QUESTION renders: text | image | both (overrides promptImage) */
+  promptShow?: "text" | "image" | "both";
+  /** how each ANSWER option renders: text | image | both */
+  optionShow?: "text" | "image" | "both";
   /** choice over a relation: values[refRole] = [{qid, labels}] */
   refRole?: string;
   /** "parent" = reverse direction: prompt is the ref (brand), options are entities (models) */
@@ -72,6 +77,8 @@ function parseConfig(raw: unknown): GameConfig {
     levels: c.levels ?? 1,
     answerRole: c.answerRole,
     promptImage: c.promptImage,
+    promptShow: c.promptShow,
+    optionShow: c.optionShow,
     refRole: c.refRole,
     refDirection: c.refDirection,
     promptImageRole: c.promptImageRole,
@@ -233,6 +240,8 @@ export async function loadGameDecks(
       refRole: cfg.refRole,
       optionCount: 2,
       promptImageRole: cfg.promptImageRole,
+      promptShow: cfg.promptShow,
+      optionShow: cfg.optionShow,
     });
     result.quadCards = buildRefChoiceDeck(entities, {
       ...base,
@@ -240,6 +249,8 @@ export async function loadGameDecks(
       refRole: cfg.refRole,
       optionCount: 4,
       promptImageRole: cfg.promptImageRole,
+      promptShow: cfg.promptShow,
+      optionShow: cfg.optionShow,
     });
     if (cfg.singleTmpl) {
       result.binaryCards = buildSingleRefDeck(entities, {
@@ -299,23 +310,38 @@ export async function loadGameDecks(
   const image = (e: DeckEntity) => (e.values[role] as string | undefined) ?? undefined;
   const label = (e: DeckEntity) => e.labels[locale] ?? e.labels.en;
 
+  // Admin-chosen presentation (text|image|both) — applied consistently to every
+  // layout. Falls back to the legacy promptImage swap when not configured.
+  const pShow = cfg.promptShow;
+  const oShow = cfg.optionShow;
+  const promptDuel = pShow
+    ? (e: DeckEntity) => showVisual(pShow, label(e), image(e))
+    : cfg.promptImage
+      ? (e: DeckEntity) => ({ image: image(e) })
+      : (e: DeckEntity) => ({ label: label(e) });
+  const optionDuel = oShow
+    ? (e: DeckEntity) => showVisual(oShow, label(e), image(e))
+    : cfg.promptImage
+      ? (e: DeckEntity) => ({ label: label(e) })
+      : (e: DeckEntity) => ({ image: image(e) });
+  const promptQuad = pShow ? (e: DeckEntity) => showVisual(pShow, label(e), image(e)) : (e: DeckEntity) => ({ image: image(e) });
+  const optionQuad = oShow ? (e: DeckEntity) => showVisual(oShow, label(e), image(e)) : (e: DeckEntity) => ({ label: label(e) });
+
   result.duelCards = buildChoiceDeck(withRole, {
     ...base,
     questions: qWithRole,
     seed: `${slug}-L${lvl}-duel-${seed}`,
     optionCount: 2,
-    // promptImage: show the picture as the QUESTION, options are names (like quad).
-    // Otherwise the classic duel: name is the question, pictures are the options.
-    prompt: (e) => (cfg.promptImage ? { image: image(e) } : { label: label(e) }),
-    option: (e) => (cfg.promptImage ? { label: label(e) } : { image: image(e) }),
+    prompt: promptDuel,
+    option: optionDuel,
   });
   result.quadCards = buildChoiceDeck(withRole, {
     ...base,
     questions: qWithRole,
     seed: `${slug}-L${lvl}-quad-${seed}`,
     optionCount: 4,
-    prompt: (e) => ({ image: image(e) }),
-    option: (e) => ({ label: label(e) }),
+    prompt: promptQuad,
+    option: optionQuad,
   });
   if (cfg.singleTmpl) {
     result.binaryCards = buildSingleAttrDeck(withRole, {

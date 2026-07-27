@@ -243,6 +243,10 @@ interface VisualPatch {
   valueRole?: string | null;
   /** own-attr choice: question is the image, options are names (all layouts) */
   promptImage?: boolean;
+  /** what the QUESTION shows: text | image | both ("" clears → default) */
+  promptShow?: "text" | "image" | "both" | "";
+  /** what each ANSWER option shows: text | image | both */
+  optionShow?: "text" | "image" | "both" | "";
 }
 
 /**
@@ -295,6 +299,14 @@ export async function setGameVisualAction(
       if (patch.promptImage) cfg.promptImage = true;
       else delete cfg.promptImage;
     }
+    const applyShow = (key: "promptShow" | "optionShow") => {
+      const v = patch[key];
+      if (v === undefined) return;
+      if (v === "" ) delete cfg[key];
+      else if (["text", "image", "both"].includes(v)) cfg[key] = v;
+    };
+    applyShow("promptShow");
+    applyShow("optionShow");
     await db.update(games).set({ config: cfg }).where(eq(games.id, gameId));
     revalidatePath("/admin");
     revalidatePath("/");
