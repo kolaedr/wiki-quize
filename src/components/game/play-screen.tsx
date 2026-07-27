@@ -157,7 +157,6 @@ export function PlayScreen({
         >
           <ArrowLeft size={18} />
         </Link>
-
         <span className="flex flex-1 items-center justify-center">
           {maxLives > 0 && <Lives lives={lives} maxLives={maxLives} />}
         </span>

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hapticAnswer } from "@/lib/haptics";
+import { playAnswer } from "@/lib/sound";
 import { useGame } from "@/stores/game";
+import { useSettings } from "@/stores/settings";
 
 export const FEEDBACK_MS = 700;
 const LIVES = 3;
@@ -54,6 +56,8 @@ export function useGameSession(
     }
   }, [done, score, best, lives, onFinish]);
 
+  const soundOn = useSettings((s) => s.sound);
+
   const answer = useCallback(
     (key: string, correct: boolean) => {
       if (picked || done) return false;
@@ -61,6 +65,8 @@ export function useGameSession(
       answersRef.current.push({ key, correct });
       setResults((r) => [...r, correct]);
       hapticAnswer(correct); // vibration on mobile (Android; iOS has no API)
+      // answering is always a tap/swipe, so audio starts within a user gesture
+      if (soundOn) playAnswer(correct);
       let willEnd = false;
       if (correct) {
         const s = streak + 1;
@@ -81,7 +87,7 @@ export function useGameSession(
       }, FEEDBACK_MS);
       return true;
     },
-    [picked, done, streak, lives],
+    [picked, done, streak, lives, soundOn],
   );
 
   const restart = useCallback(() => {

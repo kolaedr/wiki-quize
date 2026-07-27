@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { SoundToggle } from "@/components/sound-toggle";
 import { ThemeSelector } from "@/components/theme-selector";
 
 /** Language + appearance controls for the signed-in account page. */
@@ -20,6 +21,10 @@ export function AccountPreferences() {
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">{t("appearance")}</span>
         <ThemeSelector />
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">{t("sound")}</span>
+        <SoundToggle />
       </div>
     </section>
   );

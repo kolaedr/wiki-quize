@@ -1,35 +1,71 @@
-/* Wiqus service worker — PWA basics:
- * - static assets (Next chunks, fonts, icons): cache-first
- * - pages/API: network-first with cache fallback, so an active game
- *   survives a network hiccup after first load
+/* Wiqus service worker.
+ *
+ * Two jobs:
+ *
+ * 1. INSTANT OPEN. Navigations are served stale-while-revalidate: the cached
+ *    HTML paints immediately and a fresh copy is fetched in the background.
+ *    The old network-first strategy meant every cold start blocked on the
+ *    network, which is exactly the white screen an installed PWA shouldn't
+ *    have. Static Next chunks stay cache-first (their URLs are hashed, so a
+ *    cached one can never be stale).
+ *
+ * 2. CONTROLLED UPDATES. This worker no longer calls skipWaiting() on install.
+ *    A new deploy therefore parks in "waiting" instead of swapping chunks under
+ *    a running game, and the page can offer an explicit "update" prompt. The
+ *    client asks for the swap by posting SKIP_WAITING.
  */
-const CACHE = "wq-v2";
+const VERSION = "wq-v3";
+const STATIC_CACHE = `${VERSION}-static`;
+const PAGES_CACHE = `${VERSION}-pages`;
+
+/** Minimal shell precached on install, so the very first offline open works. */
+const SHELL = ["/", "/icon.svg", "/icon-192.png", "/manifest.webmanifest"];
+
 const STATIC_RE =
   /\/(_next\/static|icon\.svg|icon-\d+\.png|favicon-32\.png|apple-touch-icon\.png|manifest\.webmanifest)/;
 
+/** Never cache: personal pages, admin, and anything under /api. */
+const NO_CACHE_RE = /^\/(api|admin|me|auth)(\/|$)/;
+
 self.addEventListener("install", (e) => {
-  self.skipWaiting();
+  // NOTE: no skipWaiting() — see the header comment. The first ever install
+  // still activates right away because there's no controller to wait for.
+  e.waitUntil(
+    caches.open(STATIC_CACHE).then((cache) =>
+      // allSettled: one bad URL must not fail the whole install
+      Promise.allSettled(SHELL.map((u) => cache.add(u))),
+    ),
+  );
 });
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))),
+      )
       .then(() => self.clients.claim()),
   );
+});
+
+/** The page asks us to take over now (user accepted the update prompt). */
+self.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (e) => {
   const { request } = e;
   if (request.method !== "GET") return;
-  const url = new URL(request.url);
-  if (url.origin !== location.origin) return; // Commons images: let the browser handle
 
+  const url = new URL(request.url);
+  if (url.origin !== location.origin) return; // Commons images: leave to the browser
+  if (NO_CACHE_RE.test(url.pathname)) return; // auth/admin/API always go to the network
+
+  // hashed build assets — safe to serve from cache forever
   if (STATIC_RE.test(url.pathname)) {
-    // cache-first for immutable static assets
     e.respondWith(
-      caches.open(CACHE).then(async (cache) => {
+      caches.open(STATIC_CACHE).then(async (cache) => {
         const hit = await cache.match(request);
         if (hit) return hit;
         const res = await fetch(request);
@@ -40,17 +76,24 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // network-first for pages
-  e.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      try {
-        const res = await fetch(request);
-        if (res.ok && request.mode === "navigate") cache.put(request, res.clone());
-        return res;
-      } catch {
-        const hit = await cache.match(request);
-        return hit ?? Response.error();
-      }
-    }),
-  );
+  // pages — stale-while-revalidate
+  if (request.mode === "navigate") {
+    e.respondWith(
+      caches.open(PAGES_CACHE).then(async (cache) => {
+        const cached = await cache.match(request);
+        const fresh = fetch(request)
+          .then((res) => {
+            if (res.ok) cache.put(request, res.clone());
+            return res;
+          })
+          .catch(() => null);
+
+        // cached copy first (instant paint), network refreshes it for next time
+        if (cached) return cached;
+        const res = await fresh;
+        // offline and never seen this URL — fall back to the cached shell
+        return res ?? (await caches.match("/")) ?? Response.error();
+      }),
+    );
+  }
 });

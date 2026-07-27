@@ -17,6 +17,10 @@ export type ChoiceLayout = "single" | "duel" | "quad";
 interface SettingsState {
   layout: ChoiceLayout;
   setLayout: (l: ChoiceLayout) => void;
+  /** answer sounds — OFF by default: a quiz often gets opened somewhere quiet */
+  sound: boolean;
+  setSound: (on: boolean) => void;
+  toggleSound: () => void;
 }
 
 export const useSettings = create<SettingsState>()(
@@ -24,6 +28,11 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       layout: "duel",
       setLayout: (layout) => set({ layout }),
+      // persist merges over these defaults, so saves written before this
+      // option existed simply start muted
+      sound: false,
+      setSound: (sound) => set({ sound }),
+      toggleSound: () => set((s) => ({ sound: !s.sound })),
     }),
     { name: "wq-settings" },
   ),
