@@ -160,5 +160,11 @@
     "captchaQ": "What is {q}?",
     "send": "Send",
     "thanks": "Thanks! Noted — I'll see what to add next."
+  },
+  "pwa": {
+    "updateTitle": "Update available",
+    "updateBody": "A new version is ready — reload to get it.",
+    "updateCta": "Update",
+    "later": "Later"
   }
 }
