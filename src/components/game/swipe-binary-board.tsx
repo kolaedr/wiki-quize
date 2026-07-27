@@ -11,13 +11,12 @@ import { useTranslations } from "next-intl";
 import { Check, ImageOff, X } from "lucide-react";
 import type { BinaryCard } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
-import { ResultScreen, StatusBar, StreakBadge } from "./hud";
+import { ResultScreen, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
 const SWIPE_THRESHOLD = 90;
 
 interface Props {
-  title: string;
   cards: BinaryCard[];
   onFinish?: (r: SessionResult) => void;
   nextHref?: string;
@@ -29,7 +28,7 @@ interface Props {
  * Swipe RIGHT = true, LEFT = false (the card itself flies away).
  * Mouse devices: ✗ / ✓ buttons. Keyboard: ← false, → true.
  */
-export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }: Props) {
+export function SwipeBinaryBoard({ cards, onFinish, nextHref, backHref }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
@@ -48,6 +47,9 @@ export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }:
         score={s.score}
         best={s.best}
         lives={s.lives}
+        maxLives={s.maxLives}
+        results={s.results}
+        total={cards.length}
         onRestart={s.restart}
         nextHref={nextHref}
         backHref={backHref}
@@ -72,15 +74,13 @@ export function SwipeBinaryBoard({ title, cards, onFinish, nextHref, backHref }:
 
   return (
     <main
-      className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-4 outline-none"
+      className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-10 outline-none"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "ArrowLeft") pick(false);
         if (e.key === "ArrowRight") pick(true);
       }}
     >
-      <StatusBar title={title} idx={s.idx} total={cards.length} lives={s.lives} maxLives={s.maxLives} />
-
       <div className="flex h-10 items-center justify-center">
         <span className="text-xs text-muted">
           {touch ? t("binaryHintTouch") : t("binaryHintMouse")}

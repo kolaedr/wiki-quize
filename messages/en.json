@@ -15,6 +15,8 @@
     "searchPlaceholder": "Search games and categories…",
     "nothingFound": "Nothing found",
     "gamesCount": "{count} games",
+    "statsQuestions": "questions",
+    "statsGames": "games available",
     "daily": "Daily deck",
     "heroPlayTitle": "Just play — no sign-up",
     "heroPlayText": "Pick a category below and start swiping. Quick rounds, real facts from Wikipedia.",
@@ -78,7 +80,13 @@
     "playAgain": "Play again",
     "nextLevel": "Next",
     "backToLevels": "Back",
-    "readMore": "Read on Wikipedia"
+    "readMore": "Read on Wikipedia",
+    "failed": "Out of lives",
+    "resultHint": "Deck cleared — nice run",
+    "failedHint": "Replay the level to raise your rating",
+    "scoreLabel": "Score",
+    "correct": "Hits",
+    "accuracy": "Accuracy"
   },
   "levels": {
     "subtitle": "{levels} levels — from famous to obscure",
@@ -89,7 +97,13 @@
     "layout": "Card layout",
     "layout_single": "Single — one card, true/false swipe",
     "layout_duel": "Double — a pair of cards, swipe",
-    "layout_quad": "Multi — 4 options"
+    "layout_quad": "Multi — 4 options",
+    "layoutName_single": "Single",
+    "layoutName_duel": "Duel",
+    "layoutName_quad": "Multi",
+    "layoutDesc_single": "One card — swipe right for true, left for false",
+    "layoutDesc_duel": "Two cards — fling the right one",
+    "layoutDesc_quad": "Four options — tap the right one"
   },
   "auth": {
     "signin": "Sign in",

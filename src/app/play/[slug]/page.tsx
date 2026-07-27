@@ -6,6 +6,7 @@ import { ChallengeButton } from "@/components/social/challenge-button";
 import { resolveText } from "@/i18n/locales";
 import { getAdminSession } from "@/lib/admin/guard";
 import { getUser } from "@/lib/social/session";
+import { getGameProgress } from "@/lib/progress/server";
 import { loadGameMeta } from "@/lib/deck/from-db";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,9 @@ export default async function GameLevelsPage({
   }
   if (!meta) notFound();
 
+  // account-side ratings — guests get {} and fall back to localStorage
+  const serverStars = await getGameProgress(me?.id, meta.gameId);
+
   return (
     <>
       <div className="mx-auto w-full max-w-2xl px-5 pt-2">
@@ -39,18 +43,19 @@ export default async function GameLevelsPage({
             { label: resolveText(meta.title, locale) },
           ]}
         />
-        {me && (
-          <div className="mt-2 flex justify-end">
-            <ChallengeButton gameSlug={meta.slug} />
-          </div>
-        )}
       </div>
       <LevelMap
         slug={meta.slug}
         title={resolveText(meta.title, locale)}
         icon={(meta.style as { icon?: string }).icon}
+        cover={(meta.style as { cover?: string }).cover}
         levels={meta.config.levels}
-      />
+        serverStars={serverStars}
+      >
+        <div className="mt-2 flex justify-center">
+          <ChallengeButton gameSlug={meta.slug} />
+        </div>
+      </LevelMap>
     </>
   );
 }

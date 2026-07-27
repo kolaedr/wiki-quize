@@ -202,6 +202,47 @@ export async function renameGameAction(
 }
 
 /**
+ * Rename a game in ANY set of locales, addressed by slug.
+ *
+ * The older renameGameAction is fixed to en+uk and takes an id; this one takes
+ * whatever locales the editor showed, so a title that already carries de/es/fr
+ * survives an edit instead of being flattened to two languages. Slug-keyed so
+ * public pages don't have to expose internal game ids just to offer an edit
+ * button. Staff-level (super OR moderator) — renaming is tidying, not generation.
+ */
+export async function setGameTitleAction(
+  slug: string,
+  title: Record<string, string>,
+): Promise<ActionResult> {
+  if (!(await getStaff())) return { ok: false, message: "forbidden" };
+
+  const clean: Record<string, string> = {};
+  for (const [code, value] of Object.entries(title ?? {})) {
+    if (!/^[a-z]{2,3}$/.test(code)) continue; // ISO-639 codes only
+    const v = String(value ?? "").trim().slice(0, 120);
+    if (v) clean[code] = v;
+  }
+  // English is the root everywhere in this codebase (resolveText falls back to
+  // it), so a title without it would render blank for some users.
+  if (!clean.en) return { ok: false, message: "Назва (EN) обовʼязкова" };
+
+  try {
+    const res = await db
+      .update(games)
+      .set({ title: clean })
+      .where(eq(games.slug, slug))
+      .returning({ id: games.id });
+    if (res.length === 0) return { ok: false, message: "гру не знайдено" };
+    revalidatePath("/admin");
+    revalidatePath("/");
+    revalidatePath(`/play/${slug}`);
+    return { ok: true, message: "назву збережено" };
+  } catch (err) {
+    return { ok: false, message: dbError(err) };
+  }
+}
+
+/**
  * Edit a game's deck config: cards per round (deckSize) and items per level
  * (perLevel). `levels` is recomputed from the game's itemsCount so the level map
  * stays consistent (a re-import overwrites itemsCount, never these two).

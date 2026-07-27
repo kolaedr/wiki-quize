@@ -11,14 +11,13 @@ import { useTranslations } from "next-intl";
 import { ImageOff } from "lucide-react";
 import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
-import { ResultScreen, StatusBar, StreakBadge } from "./hud";
+import { ResultScreen, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
 const THROW_DISTANCE = 110;
 const THROW_VELOCITY = 900;
 
 interface Props {
-  title: string;
   /** Cards built with optionCount: 2 — prompt on top, a pair of cards "in hand". */
   cards: ChoiceCard[];
   onFinish?: (r: SessionResult) => void;
@@ -32,7 +31,7 @@ interface Props {
  * throw it (distance or flick velocity) to pick it — it flies off with
  * your throw's momentum. Tap/click also picks. Keyboard: ← →.
  */
-export function SwipeDuelBoard({ title, cards, onFinish, nextHref, backHref }: Props) {
+export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
@@ -44,6 +43,9 @@ export function SwipeDuelBoard({ title, cards, onFinish, nextHref, backHref }: P
         score={s.score}
         best={s.best}
         lives={s.lives}
+        maxLives={s.maxLives}
+        results={s.results}
+        total={cards.length}
         onRestart={s.restart}
         nextHref={nextHref}
         backHref={backHref}
@@ -55,15 +57,13 @@ export function SwipeDuelBoard({ title, cards, onFinish, nextHref, backHref }: P
 
   return (
     <main
-      className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-4 outline-none"
+      className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-10 outline-none"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "ArrowLeft") pick(card.options[0]);
         if (e.key === "ArrowRight") pick(card.options[1]);
       }}
     >
-      <StatusBar title={title} idx={s.idx} total={cards.length} lives={s.lives} maxLives={s.maxLives} />
-
       {/* prompt (image + label — e.g. brand logo above the brand name) */}
       <div
         className={`flex flex-col items-center justify-center gap-1 text-center ${
@@ -80,8 +80,8 @@ export function SwipeDuelBoard({ title, cards, onFinish, nextHref, backHref }: P
             className="flex flex-col items-center gap-2"
           >
             {card.prompt.image && (
-              // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink
               // big question image: ~80% width so it's actually readable on mobile
+              // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink
               <img
                 src={card.prompt.image}
                 alt=""

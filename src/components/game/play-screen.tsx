@@ -5,13 +5,21 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Square, Swords, LayoutGrid, ArrowLeft } from "lucide-react";
 import type { BinaryCard, ChoiceCard } from "@/lib/deck/types";
+import { useGame } from "@/stores/game";
 import { useProgress } from "@/stores/progress";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
+import { useToast } from "@/stores/toast";
 import { useGameScrollLock } from "@/lib/use-scroll-lock";
+import { Toaster } from "@/components/toaster";
 import { GameBoard } from "./game-board";
+import { Lives } from "./hud";
+import { GameProgressBar } from "./progress-bar";
 import { SwipeBinaryBoard } from "./swipe-binary-board";
 import { SwipeDuelBoard } from "./swipe-duel-board";
 import type { SessionResult } from "./use-game-session";
+
+/** Icon per layout — the toggle shows the CURRENT one. */
+const LAYOUT_ICON = { single: Square, duel: Swords, quad: LayoutGrid } as const;
 
 interface Props {
   title: string;
@@ -54,21 +62,45 @@ export function PlayScreen({
   const { layout, setLayout } = useSettings();
   const markCompleted = useProgress((s) => s.markCompleted);
   const recordScore = useProgress((s) => s.recordScore);
+  const showToast = useToast((s) => s.show);
+  const setGameTitle = useGame((s) => s.setTitle);
+  const resetGame = useGame((s) => s.reset);
+  const lives = useGame((s) => s.lives);
+  const maxLives = useGame((s) => s.maxLives);
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setTimeout(() => setMounted(true), 0);
+  }, []);
   // arcade mode: no page scroll/bounce while playing
   useGameScrollLock();
 
+  // the site header renders this as a subline under the logo, so the game
+  // screen doesn't need a title row of its own
+  useEffect(() => {
+    setGameTitle(title);
+    return () => resetGame();
+  }, [title, setGameTitle, resetGame]);
+
   const onFinish = useCallback(
     (r: SessionResult) => {
-      // survived the deck → the level is passed, next one unlocks
-      if (slug && level && r.lives > 0) markCompleted(slug, level);
+      // survived the deck → the level is passed, next one unlocks.
+      // lives left doubles as the star rating (3 = flawless run).
+      if (slug && level && r.lives > 0) markCompleted(slug, level, r.lives);
       if (slug) recordScore(slug, r.score);
       if (!gameId) return; // demo decks are not persisted
+      // level + stars let the server keep the same per-level rating the local
+      // store keeps, so a signed-in player carries progress across devices
       fetch("/api/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ gameId, seed, score: r.score, answers: r.answers }),
+        body: JSON.stringify({
+          gameId,
+          seed,
+          score: r.score,
+          answers: r.answers,
+          level,
+          stars: r.lives,
+        }),
       }).catch(() => {}); // fire-and-forget
     },
     [gameId, seed, slug, level, markCompleted, recordScore],
@@ -79,7 +111,25 @@ export function PlayScreen({
   if (active === "single" && binaryCards.length === 0) active = "duel";
   if (active === "duel" && duelCards.length === 0 && quadCards.length > 0) active = "quad";
 
-  const showLayoutSwitch = mechanic === "choice" && quadCards.length > 0;
+  // layouts this particular game can actually render, in cycle order
+  const available: ChoiceLayout[] = [];
+  if (mechanic === "choice" && quadCards.length > 0) {
+    if (binaryCards.length > 0) available.push("single");
+    if (duelCards.length > 0) available.push("duel");
+    available.push("quad");
+  }
+  const showLayoutSwitch = available.length > 1;
+
+  /** One button instead of a radio group: tap = next layout + a toast naming it. */
+  const cycleLayout = () => {
+    const i = available.indexOf(active);
+    const next = available[(i + 1) % available.length];
+    setLayout(next);
+    showToast({
+      title: t(`settings.layoutName_${next}`),
+      description: t(`settings.layoutDesc_${next}`),
+    });
+  };
 
   const nextHref =
     slug && level && levels && level < levels ? `/play/${slug}/${level + 1}` : undefined;
@@ -87,58 +137,55 @@ export function PlayScreen({
 
   let board: React.ReactNode;
   if (mechanic === "swipe_binary" || (mechanic === "choice" && active === "single")) {
-    board = (
-      <SwipeBinaryBoard key="single" title={title} cards={binaryCards} onFinish={onFinish} {...nav} />
-    );
+    board = <SwipeBinaryBoard key="single" cards={binaryCards} onFinish={onFinish} {...nav} />;
   } else if (mechanic === "higher_lower" || active === "duel") {
-    board = <SwipeDuelBoard key="duel" title={title} cards={duelCards} onFinish={onFinish} {...nav} />;
+    board = <SwipeDuelBoard key="duel" cards={duelCards} onFinish={onFinish} {...nav} />;
   } else {
-    board = <GameBoard key="quad" title={title} cards={quadCards} onFinish={onFinish} {...nav} />;
+    board = <GameBoard key="quad" cards={quadCards} onFinish={onFinish} {...nav} />;
   }
 
   return (
     <>
-      <div className="mx-auto flex w-full max-w-lg items-center justify-between gap-3 px-5 pt-2">
+      {/* one slim row: back · lives · layout. Two round buttons at the edges,
+          the hearts centred in the space they leave. */}
+      <div className="mx-auto flex w-full max-w-lg items-center gap-3 px-5 pt-1 pb-6">
         <Link
           href={backHref}
           aria-label={t("game.back")}
-          className="glass-card flex h-10 items-center gap-1.5 rounded-full px-3.5 text-sm text-muted transition-colors hover:text-fg"
+          title={t("game.back")}
+          className="glass-card flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-fg"
         >
-          <ArrowLeft size={16} />
-          {t("game.back")}
+          <ArrowLeft size={18} />
         </Link>
+
+        <span className="flex flex-1 items-center justify-center">
+          {maxLives > 0 && <Lives lives={lives} maxLives={maxLives} />}
+        </span>
+
         {showLayoutSwitch ? (
-          <div
-            role="radiogroup"
+          <button
+            type="button"
+            onClick={cycleLayout}
             aria-label={t("settings.layout")}
-            className="glass-card flex items-center gap-0.5 p-1"
+            title={t(`settings.layoutName_${active}`)}
+            className="glass-card flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-accent transition-colors hover:text-fg"
           >
-            {(
-              [
-                ["single", Square],
-                ["duel", Swords],
-                ["quad", LayoutGrid],
-              ] as const
-            ).map(([l, Icon]) => (
-              <button
-                key={l}
-                role="radio"
-                aria-checked={active === l}
-                title={t(`settings.layout_${l}`)}
-                onClick={() => setLayout(l)}
-                className={`flex h-8 w-9 items-center justify-center rounded-full transition-colors ${
-                  active === l ? "bg-accent-soft text-accent" : "text-muted hover:text-fg"
-                }`}
-              >
-                <Icon size={16} />
-              </button>
-            ))}
-          </div>
+            <LayoutIcon layout={active} />
+          </button>
         ) : (
-          <span />
+          // keeps the hearts centred when there's nothing to switch
+          <span className="h-10 w-10 shrink-0" aria-hidden />
         )}
       </div>
+
       {board}
+      <GameProgressBar />
+      <Toaster />
     </>
   );
+}
+
+function LayoutIcon({ layout }: { layout: ChoiceLayout }) {
+  const Icon = LAYOUT_ICON[layout];
+  return <Icon size={18} />;
 }

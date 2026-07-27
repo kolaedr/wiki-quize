@@ -448,6 +448,42 @@ export async function listCategories(): Promise<CatalogEntry[]> {
   }
 }
 
+export interface ContentStats {
+  /** playable question pool: non-excluded items of topics behind a published game */
+  items: number;
+  games: number;
+}
+
+/**
+ * Headline numbers for the home banner. "Questions" deliberately counts only
+ * items that can actually show up in play — excluded items and datasets with no
+ * published game aren't available to anyone, so counting them would overstate.
+ */
+export async function getContentStats(): Promise<ContentStats> {
+  try {
+    const publishedTopics = db
+      .selectDistinct({ topicId: games.topicId })
+      .from(games)
+      .where(eq(games.status, "published"));
+
+    const [[items], [gamesRow]] = await Promise.all([
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(topicEntities)
+        .where(
+          and(eq(topicEntities.excluded, false), inArray(topicEntities.topicId, publishedTopics)),
+        ),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(games)
+        .where(eq(games.status, "published")),
+    ]);
+    return { items: items?.n ?? 0, games: gamesRow?.n ?? 0 };
+  } catch {
+    return { items: 0, games: 0 };
+  }
+}
+
 export const PAGE_SIZE = 10;
 
 export interface CategoryNode {

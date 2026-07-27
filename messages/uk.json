@@ -15,6 +15,8 @@
     "searchPlaceholder": "Пошук ігор і категорій…",
     "nothingFound": "Нічого не знайдено",
     "gamesCount": "Ігор: {count}",
+    "statsQuestions": "питань",
+    "statsGames": "ігор доступно",
     "daily": "Щоденна колода",
     "heroPlayTitle": "Просто грай — без реєстрації",
     "heroPlayText": "Обери категорію нижче і свайпай. Швидкі раунди, реальні факти з Вікіпедії.",
@@ -78,7 +80,13 @@
     "playAgain": "Ще раз",
     "nextLevel": "Далі",
     "backToLevels": "Повернутись",
-    "readMore": "Читати у Вікіпедії"
+    "readMore": "Читати у Вікіпедії",
+    "failed": "Життя скінчились",
+    "resultHint": "Колоду пройдено — гарний захід",
+    "failedHint": "Перепройди рівень, щоб підняти рейтинг",
+    "scoreLabel": "Рахунок",
+    "correct": "Влучань",
+    "accuracy": "Точність"
   },
   "levels": {
     "subtitle": "{levels} рівнів — від відомих до рідкісних",
@@ -89,7 +97,13 @@
     "layout": "Стиль карток",
     "layout_single": "Сінгл — одна картка, свайп так/ні",
     "layout_duel": "Дабл — пара карт, свайп",
-    "layout_quad": "Мульті — 4 варіанти"
+    "layout_quad": "Мульті — 4 варіанти",
+    "layoutName_single": "Сінгл",
+    "layoutName_duel": "Дабл",
+    "layoutName_quad": "Мульті",
+    "layoutDesc_single": "Одна картка — свайп праворуч «так», ліворуч «ні»",
+    "layoutDesc_duel": "Дві картки — кинь правильну",
+    "layoutDesc_quad": "Чотири варіанти — тапни правильний"
   },
   "auth": {
     "signin": "Увійти",

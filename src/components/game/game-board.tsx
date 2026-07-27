@@ -4,11 +4,10 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
-import { ResultScreen, StatusBar, StreakBadge } from "./hud";
+import { ResultScreen, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
 interface Props {
-  title: string;
   cards: ChoiceCard[];
   onFinish?: (r: SessionResult) => void;
   nextHref?: string;
@@ -16,7 +15,7 @@ interface Props {
 }
 
 /** Quad layout of the `choice` mechanic: big prompt card + 2×2 tap options. */
-export function GameBoard({ title, cards, onFinish, nextHref, backHref }: Props) {
+export function GameBoard({ cards, onFinish, nextHref, backHref }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const [imgFailed, setImgFailed] = useState(false);
@@ -30,6 +29,9 @@ export function GameBoard({ title, cards, onFinish, nextHref, backHref }: Props)
         score={s.score}
         best={s.best}
         lives={s.lives}
+        maxLives={s.maxLives}
+        results={s.results}
+        total={cards.length}
         onRestart={s.restart}
         nextHref={nextHref}
         backHref={backHref}
@@ -38,9 +40,7 @@ export function GameBoard({ title, cards, onFinish, nextHref, backHref }: Props)
   }
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-4">
-      <StatusBar title={title} idx={s.idx} total={cards.length} lives={s.lives} maxLives={s.maxLives} />
-
+    <main className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-10">
       {/* card */}
       <div className="relative min-h-0 flex-1">
         <AnimatePresence mode="wait">

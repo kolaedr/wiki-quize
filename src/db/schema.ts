@@ -184,6 +184,10 @@ export const sessions = pgTable(
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     seed: text("seed").notNull(),
     score: integer("score").notNull().default(0),
+    /** Which level was played — lets the raw log be analysed per level. */
+    level: integer("level"),
+    /** Lives left at the end = the 0..3 star rating. Null for legacy rows. */
+    stars: integer("stars"),
     /** Per-card answers: [{cardId, entityId, correct, ms}] — feeds telemetry & collections. */
     answers: jsonb("answers").notNull().default([]),
     isDaily: boolean("is_daily").notNull().default(false),
@@ -193,6 +197,41 @@ export const sessions = pgTable(
   (t) => [
     index("sessions_game_idx").on(t.gameId),
     index("sessions_user_idx").on(t.userId),
+  ],
+);
+
+/**
+ * Per-user, per-level BEST result — the account-side twin of the guest
+ * localStorage progress. `sessions` stays the append-only raw log (every
+ * play-through with its answers); this table is the small aggregate the level
+ * map reads, so drawing a map never scans the log.
+ *
+ * One row per (user, game, level): it only ever improves, and `attempts`
+ * counts how many times the level was cleared.
+ */
+export const gameProgress = pgTable(
+  "game_progress",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    gameId: uuid("game_id")
+      .notNull()
+      .references(() => games.id, { onDelete: "cascade" }),
+    level: integer("level").notNull(),
+    /** best rating so far, 1..3 (lives left when cleared) */
+    stars: integer("stars").notNull().default(0),
+    bestScore: integer("best_score").notNull().default(0),
+    /** how many times this level was cleared */
+    attempts: integer("attempts").notNull().default(0),
+    firstClearedAt: timestamp("first_cleared_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("game_progress_user_game_level_uq").on(t.userId, t.gameId, t.level),
+    index("game_progress_user_idx").on(t.userId),
+    index("game_progress_game_idx").on(t.gameId),
   ],
 );
 
