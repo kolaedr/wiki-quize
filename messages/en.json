@@ -48,7 +48,8 @@
     "noGames": "No finished games yet — go play something!",
     "preferences": "Preferences",
     "language": "Language",
-    "appearance": "Appearance"
+    "appearance": "Appearance",
+    "sound": "Answer sounds"
   },
   "game": {
     "flagsTitle": "Flags of the World",
@@ -103,7 +104,10 @@
     "layoutName_quad": "Multi",
     "layoutDesc_single": "One card — swipe right for true, left for false",
     "layoutDesc_duel": "Two cards — fling the right one",
-    "layoutDesc_quad": "Four options — tap the right one"
+    "layoutDesc_quad": "Four options — tap the right one",
+    "sound": "Sound",
+    "soundOn": "Sound on — tap to mute",
+    "soundOff": "Muted — tap to unmute"
   },
   "auth": {
     "signin": "Sign in",
