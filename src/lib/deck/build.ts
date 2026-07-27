@@ -1,6 +1,17 @@
 import { rngFromSeed, shuffle } from "@/lib/rng";
 import type { BinaryCard, BuildChoiceOptions, ChoiceCard, DeckEntity } from "./types";
 
+/** What a question / option card renders: text only, image only, or both. */
+export type Show = "text" | "image" | "both";
+
+/** Build a card visual ({label?, image?}) from a Show mode + the raw values. */
+export function showVisual(show: Show, label?: string, image?: string) {
+  return {
+    label: show === "image" ? undefined : label,
+    image: show === "text" ? undefined : image,
+  };
+}
+
 /** {qid, labels, image?} reference stored inside entity values (languages, origin countries…). */
 export interface EntityRef {
   qid: string;
@@ -108,6 +119,10 @@ export function buildRefChoiceDeck(
     deckSize?: number;
     optionCount?: number;
     promptImageRole?: string;
+    /** how the QUESTION (the entity) renders; default: image if it has one, else text */
+    promptShow?: Show;
+    /** how each ANSWER (the ref, e.g. a country) renders; default: both (name + flag) */
+    optionShow?: Show;
     questions?: DeckEntity[];
   },
 ): ChoiceCard[] {
@@ -142,28 +157,25 @@ export function buildRefChoiceDeck(
     ).slice(0, optionCount - 1);
     if (distractors.length < optionCount - 1) continue;
 
+    // ANSWER visual (the ref, e.g. a country): admin-chosen, default name + flag
+    const oShow = opts.optionShow ?? "both";
     const options = shuffle(
-      [correct, ...distractors].map((r) => ({
-        key: r.qid,
-        label: refLabel(r),
-        image: r.image,
-      })),
+      [correct, ...distractors].map((r) => ({ key: r.qid, ...showVisual(oShow, refLabel(r), r.image) })),
       rnd,
     );
 
-    const promptImage = opts.promptImageRole
-      ? ((q.values[opts.promptImageRole] as string | undefined) ?? undefined)
-      : undefined;
+    // QUESTION visual (the entity, e.g. a lake): its own photo and/or name.
+    // Since the answer is a DIFFERENT entity (the country), showing the name here
+    // does NOT leak — so admins can pick text/image/both freely.
+    const promptImg =
+      (opts.promptImageRole ? (q.values[opts.promptImageRole] as string | undefined) : undefined) ??
+      q.imageUrl ??
+      undefined;
+    const pShow = opts.promptShow ?? (promptImg ? "image" : "text");
     cards.push({
       id: `${q.qid}-${cards.length}`,
       mechanic: "choice",
-      prompt: {
-        // the photo IS the question. The entity name would give the answer away
-        // ("Audi A4" → brand Audi), so the label is only a fallback for items
-        // that have no image.
-        label: promptImage ? undefined : (q.labels[locale] ?? q.labels.en),
-        image: promptImage,
-      },
+      prompt: showVisual(pShow, q.labels[locale] ?? q.labels.en, promptImg),
       options,
       correctKey: correct.qid,
       explain: { wikiUrl: q.wikiLinks?.[locale] ?? q.wikiLinks?.en ?? undefined },

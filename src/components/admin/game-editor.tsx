@@ -40,7 +40,8 @@ export function GameEditor({
   refRole,
   cover,
   icon,
-  promptImage: promptImageInit = false,
+  promptShow: promptShowInit = "",
+  optionShow: optionShowInit = "",
   mod = false,
 }: {
   gameId: string;
@@ -59,6 +60,8 @@ export function GameEditor({
   cover?: string;
   icon?: string;
   promptImage?: boolean;
+  promptShow?: "" | "text" | "image" | "both";
+  optionShow?: "" | "text" | "image" | "both";
   /** moderator view: only title + icon (no deck/visual/cover/delete) */
   mod?: boolean;
 }) {
@@ -79,13 +82,15 @@ export function GameEditor({
   const [pRole, setPRole] = useState(promptImageRole ?? "");
   const [iRole, setIRole] = useState(imageRole ?? "");
   const [vRole, setVRole] = useState(valueRole ?? "");
-  const [pImg, setPImg] = useState(promptImageInit);
+  const [pShow, setPShow] = useState<string>(promptShowInit);
+  const [oShow, setOShow] = useState<string>(optionShowInit);
   const [cov, setCov] = useState<CoverageResult | null>(null);
 
   const isRefChoice = mechanic === "choice" && !!refRole;
   const isOwnChoice = mechanic === "choice" && !refRole;
+  const isChoice = isRefChoice || isOwnChoice;
   const isHL = mechanic === "higher_lower";
-  const hasVisual = (isRefChoice || isOwnChoice) ? imageFields.length > 0 : isHL;
+  const hasVisual = isChoice ? imageFields.length > 0 : isHL;
 
   const projectedLevels = Math.max(1, Math.ceil((itemsCount || per) / Math.max(2, per)));
 
@@ -120,12 +125,14 @@ export function GameEditor({
         promptImageRole?: string | null;
         imageRole?: string | null;
         valueRole?: string | null;
-        promptImage?: boolean;
+        promptShow?: "" | "text" | "image" | "both";
+        optionShow?: "" | "text" | "image" | "both";
       } = {};
       if (isRefChoice) patch.promptImageRole = pRole || null;
-      if (isOwnChoice) {
-        patch.answerRole = aRole || null;
-        patch.promptImage = pImg;
+      if (isOwnChoice) patch.answerRole = aRole || null;
+      if (isChoice) {
+        patch.promptShow = pShow as "" | "text" | "image" | "both";
+        patch.optionShow = oShow as "" | "text" | "image" | "both";
       }
       if (isHL) {
         patch.imageRole = iRole || null;
@@ -191,32 +198,41 @@ export function GameEditor({
       </div>
 
       {/* VISUAL: which dataset fields are shown as question / answer */}
-      {!mod && hasVisual && (
+      {!mod && (hasVisual || isChoice) && (
         <div className="flex flex-col gap-2 border-t border-line/40 pt-2">
           <span className="text-xs font-semibold text-fg">Візуал гри — що показуємо</span>
-          <div className="flex flex-wrap items-end gap-3 text-xs text-muted">
-            {isRefChoice && (
+
+          {/* presentation: what the QUESTION and each OPTION render (text/image/both) */}
+          {isChoice && (
+            <div className="flex flex-wrap items-end gap-3 text-xs text-muted">
               <label className="flex flex-col gap-1">
-                Візуал питання (зображення сутності)
+                Питання показує
+                <ShowSelect value={pShow} onChange={setPShow} />
+              </label>
+              <label className="flex flex-col gap-1">
+                Варіанти показують
+                <ShowSelect value={oShow} onChange={setOShow} />
+              </label>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-end gap-3 text-xs text-muted">
+            {isRefChoice && imageFields.length > 0 && (
+              <label className="flex flex-col gap-1">
+                Зображення питання (яке поле)
                 <RoleSelect
                   value={pRole}
                   onChange={setPRole}
                   options={imageFields}
-                  emptyLabel="текст (назва)"
+                  emptyLabel="головне фото"
                 />
               </label>
             )}
-            {isOwnChoice && (
-              <>
-                <label className="flex flex-col gap-1">
-                  Зображення-відповідь
-                  <RoleSelect value={aRole} onChange={setARole} options={imageFields} />
-                </label>
-                <label className="flex items-center gap-2 pb-2">
-                  <input type="checkbox" checked={pImg} onChange={(e) => setPImg(e.target.checked)} />
-                  Питання — зображення (варіанти = назви)
-                </label>
-              </>
+            {isOwnChoice && imageFields.length > 0 && (
+              <label className="flex flex-col gap-1">
+                Зображення-відповідь (яке поле)
+                <RoleSelect value={aRole} onChange={setARole} options={imageFields} />
+              </label>
             )}
             {isHL && (
               <>
@@ -327,6 +343,21 @@ export function GameEditor({
         {msg && <span className="text-[11px] text-muted">{msg}</span>}
       </div>
     </div>
+  );
+}
+
+function ShowSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-9 rounded-lg border border-line/60 bg-transparent px-2 text-xs text-fg outline-none focus:border-accent"
+    >
+      <option value="">за замовчуванням</option>
+      <option value="text">лише текст</option>
+      <option value="image">лише зображення</option>
+      <option value="both">текст + зображення</option>
+    </select>
   );
 }
 

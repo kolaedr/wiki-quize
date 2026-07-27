@@ -30,7 +30,7 @@ export default async function AdminTopicPage({
   const { slug } = await params;
   const { page: pageParam, tab: tabParam } = await searchParams;
   const page = Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1);
-  const tab = tabParam === "games" ? "games" : "items";
+  const tab = tabParam === "games" ? "games" : tabParam === "sync" ? "sync" : "items";
 
   const [topic] = await db.select().from(topics).where(eq(topics.slug, slug)).limit(1);
   if (!topic) notFound();
@@ -94,9 +94,9 @@ export default async function AdminTopicPage({
     />
   );
 
-  const tabLink = (key: "items" | "games", label: string) => (
+  const tabLink = (key: "items" | "games" | "sync", label: string) => (
     <Link
-      href={key === "items" ? `/admin/topics/${slug}` : `/admin/topics/${slug}?tab=games`}
+      href={key === "items" ? `/admin/topics/${slug}` : `/admin/topics/${slug}?tab=${key}`}
       className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
         tab === key
           ? "border-accent text-accent"
@@ -109,14 +109,22 @@ export default async function AdminTopicPage({
 
   return (
     <>
-      <TopicHeader title={resolveText(topic.title, "uk")} sync={sync} off={off} />
+      <TopicHeader title={resolveText(topic.title, "uk")} sync={null} off={off} />
 
       <div className="flex gap-1 border-b border-line/60">
         {tabLink("items", `Айтеми (${itemsTotal})`)}
         {tabLink("games", `Ігри (${gameRows.length})`)}
+        {tabLink("sync", "Синхронізація")}
       </div>
 
-      {tab === "games" ? (
+      {tab === "sync" ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
+            <Settings2 size={14} /> Синхронізація з Wikidata
+          </h2>
+          {sync}
+        </section>
+      ) : tab === "games" ? (
         <section className="flex flex-col gap-3">
           {gameRows.length === 0 && (
             <p className="text-sm text-muted">
