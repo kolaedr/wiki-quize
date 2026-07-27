@@ -35,6 +35,33 @@ docs/             PROJECT.md + plan/ (UA roadmap)
 
 ---
 
+## Git workflow
+
+| Branch | Role |
+|---|---|
+| `main` | Production |
+| `dev` | Integration / staging |
+| `features` | Agent integration branch (base for all agent work) |
+| `features/<name>` | Optional sub-branch for a specific task |
+
+**Before starting any work**
+
+1. `git fetch origin`
+2. Merge latest `origin/dev` into `features` (or into the current `features/*` sub-branch via `features`)
+3. Skim recent commits on `dev` to see what changed
+
+**While working**
+
+- Branch from `features` — work directly on `features` or on a sub-branch like `features/my-task`
+- Merge completed sub-branches back into `features` and push
+
+**Pull requests**
+
+- Do **not** open a PR to `dev` on your own
+- Push finished work to `features`; open PR `features` → `dev` only when explicitly asked
+
+---
+
 ## Local development
 
 ```bash
