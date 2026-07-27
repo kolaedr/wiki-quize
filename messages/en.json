@@ -42,7 +42,10 @@
     "bestResults": "Best results",
     "leaderboard": "Leaderboard",
     "recent": "Recent games",
-    "noGames": "No finished games yet — go play something!"
+    "noGames": "No finished games yet — go play something!",
+    "preferences": "Preferences",
+    "language": "Language",
+    "appearance": "Appearance"
   },
   "game": {
     "flagsTitle": "Flags of the World",
@@ -105,9 +108,13 @@
     "genericError": "Something went wrong. Try again."
   },
   "theme": {
+    "label": "Theme",
     "light": "Light",
     "dark": "Dark",
     "system": "System"
+  },
+  "localePicker": {
+    "title": "Choose language"
   },
   "social": {
     "inviteCta": "Create invite link",

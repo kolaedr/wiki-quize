@@ -7,6 +7,14 @@ Repo: `kolaedr/wiki-quize` · Docs: [`docs/PROJECT.md`](./docs/PROJECT.md) (EN) 
 
 ---
 
+## ⛔ Agent operating rules (MUST follow — read first)
+
+1. **Branching.** Create a **separate branch per task** and open the PR against **`dev`**. Do **not** commit directly on `dev` or `main`. **Never** merge into `main` — the user performs the `dev` → `main` merge themselves. Default base branch for every PR is `dev`.
+2. **Seeds are opt-in and destructive.** Run `npm run db:seed` / `npm run db:seed:categories` **only** when the user explicitly asks. `db:seed` deletes & replaces `topic_entities` for the `countries`/`car-brands`/`car-models` slugs and overwrites `limits`, starter game configs, and category metadata — it will damage a real DB.
+3. **Migrations require confirmation.** Before running `npm run db:migrate`, **ask the user first** and state in writing whether the pending migration is non-destructive (won't drop/alter existing data). Only run after they approve.
+
+---
+
 ## Project layout
 
 ```
@@ -32,6 +40,33 @@ docs/             PROJECT.md + plan/ (UA roadmap)
 - **Commons images are hotlinked**, never stored. Allowed hosts: `upload.wikimedia.org`, `commons.wikimedia.org` (`next.config.ts`).
 - **Minimize scope**: match existing patterns; do not refactor unrelated code.
 - **Comments in code**: English only.
+
+---
+
+## Git workflow
+
+| Branch | Role |
+|---|---|
+| `main` | Production |
+| `dev` | Integration / staging |
+| `features` | Agent integration branch (base for all agent work) |
+| `features/<name>` | Optional sub-branch for a specific task |
+
+**Before starting any work**
+
+1. `git fetch origin`
+2. Merge latest `origin/dev` into `features` (or into the current `features/*` sub-branch via `features`)
+3. Skim recent commits on `dev` to see what changed
+
+**While working**
+
+- Branch from `features` — work directly on `features` or on a sub-branch like `features/my-task`
+- Merge completed sub-branches back into `features` and push
+
+**Pull requests**
+
+- Do **not** open a PR to `dev` on your own
+- Push finished work to `features`; open PR `features` → `dev` only when explicitly asked
 
 ---
 
@@ -111,6 +146,14 @@ Cloud agents run on an isolated Ubuntu VM. Configuration lives in [`.cursor/envi
 | Content ingest | `src/lib/ingest/`, presets in `src/lib/ingest/presets.ts` |
 
 Always finish with `npm run lint` and `npm run build` before opening a PR.
+
+### Known caveats
+
+- `npm run lint` currently reports **pre-existing** errors (mostly `react-hooks/set-state-in-effect`, e.g. `src/lib/use-coarse-pointer.ts`, `src/components/theme-toggle.tsx`). They are unrelated to most tasks — focus on not adding *new* lint errors rather than a clean exit code.
+- `next build` (Next 16) does **not** fail on those ESLint errors; a green build means TypeScript + compilation passed.
+- `npm run db:migrate` is safe/idempotent (tracked migrations).
+- **`npm run db:seed` is DESTRUCTIVE — do not run it against a database with real data.** It `DELETE`s and replaces all `topic_entities` for the `countries`, `car-brands`, and `car-models` topic slugs, overwrites the whole `limits` table with defaults, and upserts (overwrites `config`/`style`/`status`) the 10 starter game slugs. `npm run db:seed:categories` overwrites presentation metadata for its 55 category slugs. Only run these on a throwaway dev DB.
+- `npm run db:seed` also validates every flag/logo image URL against Wikimedia before inserting (~1 min, network-bound); a built-in meta-guard trusts all URLs if validation looks rate-limited.
 
 ---
 

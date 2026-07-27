@@ -15,7 +15,7 @@ const ICONS: Record<Mode, React.ComponentType<{ size?: number | string }>> = {
   dark: Moon,
 };
 
-export function ThemeToggle() {
+export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const t = useTranslations("theme");
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -31,9 +31,11 @@ export function ThemeToggle() {
       onClick={() => setTheme(next)}
       title={`${t(current)} → ${t(next)}`}
       aria-label={t(current)}
-      className="glass-card flex h-10 w-10 items-center justify-center text-muted transition-colors hover:text-accent active:scale-95"
+      className={`glass-card flex items-center justify-center text-muted transition-colors hover:text-accent active:scale-95 ${
+        compact ? "h-6 w-6 rounded-lg" : "h-10 w-10"
+      }`}
     >
-      <Icon size={18} />
+      <Icon size={compact ? 14 : 18} />
     </button>
   );
 }
