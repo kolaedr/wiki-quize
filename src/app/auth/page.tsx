@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GoogleLogo } from "@/components/auth/google-logo";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/auth-client";
@@ -119,6 +120,7 @@ export default function AuthPage() {
             className="mt-3 w-full"
             onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
           >
+            <GoogleLogo size={17} />
             {t("google")}
           </Button>
         )}
