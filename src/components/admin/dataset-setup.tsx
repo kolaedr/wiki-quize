@@ -10,6 +10,7 @@ import {
   createDatasetAction,
   probeClassAction,
   probeFacetsAction,
+  resolveLabelsAction,
   roleCheckAction,
   searchClassesAction,
   searchPropertiesAction,
@@ -31,6 +32,18 @@ import { ICON_NAMES } from "@/components/game-icon";
 export interface DatasetCategoryOption {
   id: string;
   title: string;
+}
+
+/** Saved config of an already-configured dataset, reopened for editing. */
+export interface DatasetInitialConfig {
+  classQids: string[];
+  sitelinksMin: number;
+  fields: TopicFieldDef[];
+  /** extra locales beyond the "en" root */
+  locales: string[];
+  filters: { prop: string; valueQid: string }[];
+  difficultyBy?: string;
+  taxonMode?: boolean;
 }
 
 /** human-readable field kinds */
@@ -257,37 +270,60 @@ export function DatasetSetup({
   topicSlug,
   categoryId,
   categoryOptions,
+  initial,
 }: {
   /** present = configure an existing draft; absent = CREATE a new dataset */
   topicSlug?: string;
   categoryId?: string;
   categoryOptions?: DatasetCategoryOption[];
+  /** present = EDIT an already-configured dataset (form starts pre-filled) */
+  initial?: DatasetInitialConfig;
 }) {
   const isCreate = !topicSlug;
+  const isEdit = !!initial;
   const router = useRouter();
   const [nameEn, setNameEn] = useState("");
   const [nameUk, setNameUk] = useState("");
   const [icon, setIcon] = useState("deck");
   const [catId, setCatId] = useState(categoryId ?? "");
-  const [classItems, setClassItems] = useState<ClassCandidate[]>([]);
+  const [classItems, setClassItems] = useState<ClassCandidate[]>(
+    () => initial?.classQids.map((qid) => ({ qid, label: qid })) ?? [],
+  );
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<ClassCandidate[] | null>(null);
   const [manual, setManual] = useState("");
-  const [threshold, setThreshold] = useState(30);
+  const [threshold, setThreshold] = useState(initial?.sitelinksMin ?? 30);
   const [minCoverage, setMinCoverage] = useState(70); // hide sparse fields by default
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [total, setTotal] = useState<number | null>(null);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [filters, setFilters] = useState<ActiveFilter[]>([]);
-  const [photoOnly, setPhotoOnly] = useState(false);
-  const [taxonMode, setTaxonMode] = useState(false); // animals/plants: match by P171*
-  const [difficultyBy, setDifficultyBy] = useState(""); // "" = popularity
+  const [picked, setPicked] = useState<Set<string>>(
+    () => new Set(initial?.fields.map((f) => f.prop) ?? []),
+  );
+  // "лише з фото" is stored as a bare P18 presence filter — split it back out
+  const [filters, setFilters] = useState<ActiveFilter[]>(
+    () =>
+      initial?.filters
+        .filter((f) => f.valueQid)
+        .map((f) => ({
+          prop: f.prop,
+          valueQid: f.valueQid,
+          propLabel: f.prop,
+          valueLabel: f.valueQid,
+        })) ?? [],
+  );
+  const [photoOnly, setPhotoOnly] = useState(
+    () => initial?.filters.some((f) => f.prop === "P18" && !f.valueQid) ?? false,
+  );
+  const [taxonMode, setTaxonMode] = useState(initial?.taxonMode ?? false); // animals/plants: P171*
+  const [difficultyBy, setDifficultyBy] = useState(initial?.difficultyBy ?? ""); // "" = popularity
   const [facets, setFacets] = useState<Facet[] | null>(null);
   const [loadingFacets, startFacets] = useTransition();
   const [roleHint, setRoleHint] = useState<
     { qid: string; label: string; occupation: number; position: number } | null
   >(null);
-  const [locales, setLocales] = useState<Set<string>>(new Set(["uk"]));
+  const [locales, setLocales] = useState<Set<string>>(
+    () => new Set(initial ? initial.locales.filter((l) => l !== "en") : ["uk"]),
+  );
   const [searching, startSearch] = useTransition();
   const [probing, startProbe] = useTransition();
   const [counting, startCount] = useTransition();
@@ -326,6 +362,34 @@ export function DatasetSetup({
     setClassItems((xs) => (xs.some((x) => x.qid === c.qid) ? xs : [...xs, c]));
     if (isCreate && !nameEn.trim()) setNameEn(c.label); // auto-suggest the name
   };
+
+  // EDIT mode: the DB only stores ids — fetch human labels once so the chips
+  // read "human (Q5)" / "громадянство = Україна" instead of raw QIDs.
+  useEffect(() => {
+    if (!initial) return;
+    const ids = [
+      ...initial.classQids,
+      ...initial.filters.flatMap((f) => [f.prop, f.valueQid].filter(Boolean)),
+    ];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    resolveLabelsAction(ids).then((r) => {
+      if (cancelled || !r.ok || !r.labels) return; // labels are cosmetic — ignore failures
+      const map = r.labels;
+      setClassItems((xs) => xs.map((c) => ({ ...c, label: map[c.qid] ?? c.label })));
+      setFilters((fs) =>
+        fs.map((f) => ({
+          ...f,
+          propLabel: map[f.prop] ?? f.propLabel,
+          valueLabel: map[f.valueQid] ?? f.valueLabel,
+        })),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // detect "role, not a class of people" (e.g. picked "president" concept)
   useEffect(() => {
@@ -380,7 +444,10 @@ export function DatasetSetup({
       if (r.ok && r.fields) {
         // default: name (always pulled) + the ONE primary image; rest is opt-in.
         // Noisy map/locator images aren't proposed at all.
-        setPicked(new Set(defaultPickedProps(r.fields)));
+        // EDIT mode: never clobber what's already configured — re-probing is how
+        // you ADD fields to an existing dataset, so the saved picks stay ticked.
+        const fresh = new Set(defaultPickedProps(r.fields));
+        setPicked((prev) => (prev.size > 0 ? prev : fresh));
       }
     });
 
@@ -414,7 +481,12 @@ export function DatasetSetup({
 
   const submit = () =>
     start(async () => {
-      const fields = fieldsFrom((probe?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind));
+      // No probe run in EDIT mode = the admin only touched threshold/locales/
+      // filters, so the saved field defs are reused verbatim (re-probing just to
+      // change a number would be wasteful and could silently drop a field).
+      const fields = probe?.ok
+        ? fieldsFrom((probe.fields ?? []).filter((f) => picked.has(f.prop) && f.kind))
+        : (initial?.fields ?? []);
       if (isCreate) {
         const r = await createDatasetAction({
           titleEn: nameEn,
@@ -458,10 +530,16 @@ export function DatasetSetup({
     (f) => Math.round(f.coverage * 100) >= minCoverage || picked.has(f.prop),
   );
   const hiddenCount = (fields?.length ?? 0) - visibleFields.length;
-  // date/number fields among the PICKED ones — candidates to rank difficulty by
-  const diffOptions = fieldsFrom(
-    (probe?.fields ?? []).filter((f) => picked.has(f.prop) && f.kind),
+  // date/number fields among the PICKED ones — candidates to rank difficulty by.
+  // Without a probe (edit mode, untouched fields) fall back to the saved defs.
+  const diffOptions = (
+    probe?.ok
+      ? fieldsFrom((probe.fields ?? []).filter((f) => picked.has(f.prop) && f.kind))
+      : (initial?.fields ?? [])
   ).filter((f) => f.kind === "date" || f.kind === "number");
+  // the settings panel (threshold, languages, difficulty, save) is available
+  // immediately when editing — a probe is only needed to CHANGE the field list
+  const showSettings = !!fields || isEdit;
 
   return (
     <div className="glass-card flex flex-col gap-3 p-4">
@@ -634,13 +712,13 @@ export function DatasetSetup({
 
       <Button size="sm" className="self-start" disabled={probing || classItems.length === 0} onClick={runProbe}>
         {probing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
-        Розвідка (англійська)
+        {isEdit ? "Розвідка (щоб змінити поля)" : "Розвідка (англійська)"}
       </Button>
 
       {probe && !probe.ok && <p className="text-xs text-danger">{probe.message}</p>}
       {probe?.ok && probe.message && <p className="text-xs text-amber-500">{probe.message}</p>}
 
-      {fields && (
+      {showSettings && (
         <>
           {/* total + threshold */}
           <div className="rounded-xl bg-accent-soft/40 p-3 text-xs">
@@ -664,7 +742,35 @@ export function DatasetSetup({
             </p>
           </div>
 
+          {/* EDIT without a probe: show what's already configured, read-only */}
+          {!fields && initial && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-fg">
+                Поля датасету ({initial.fields.length})
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {initial.fields.map((f) => (
+                  <span
+                    key={f.role}
+                    className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] text-accent"
+                  >
+                    {f.role} · {KIND_UK[f.kind] ?? f.kind}{" "}
+                    <span className="opacity-70">{f.prop}</span>
+                  </span>
+                ))}
+                {initial.fields.length === 0 && (
+                  <span className="text-[11px] text-muted">полів немає</span>
+                )}
+              </div>
+              <span className="text-[11px] text-muted">
+                Щоб додати/прибрати поля — натисни «Розвідка» вище: таблиця полів
+                зʼявиться з уже позначеними поточними.
+              </span>
+            </div>
+          )}
+
           {/* fields = checkboxes discovered across the top items */}
+          {fields && (
           <div className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-fg">Які поля тягнути?</span>
             <p className="text-[11px] text-muted">
@@ -743,6 +849,7 @@ export function DatasetSetup({
               </table>
             </div>
           </div>
+          )}
 
           {/* languages: English root + optional extras */}
           <div className="flex flex-col gap-1">
@@ -828,21 +935,44 @@ export function DatasetSetup({
 
           {saved ? (
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-success">Конфіг збережено — тягну дані батчами:</span>
-              {topicSlug && <ImportRunner topicSlug={topicSlug} autoStart />}
+              <span className="text-xs text-success">
+                {isEdit
+                  ? "Конфіг оновлено. Щоб він застосувався до айтемів — прожени чергу:"
+                  : "Конфіг збережено — тягну дані батчами:"}
+              </span>
+              {/* editing never auto-fires a re-import: the admin may be mid-way
+                  through tweaking and a re-sync is a deliberate act */}
+              {topicSlug && <ImportRunner topicSlug={topicSlug} autoStart={!isEdit} />}
               <p className="text-[11px] text-muted">
                 Іде по черзі, батч за батчем — не закривай сторінку до завершення.
+                {isEdit && " Ресинк доповнює наявні айтеми новими полями (не видаляє їх)."}
               </p>
             </div>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button
-                disabled={pending || picked.size === 0 || (isCreate && !nameEn.trim())}
+                disabled={
+                  pending ||
+                  (isCreate && !nameEn.trim()) ||
+                  classItems.length === 0 ||
+                  // editing may save with the OLD field set untouched; a fresh
+                  // setup must have at least one field ticked
+                  (probe ? picked.size === 0 : !isEdit)
+                }
                 onClick={submit}
               >
                 {pending && <Loader2 size={14} className="animate-spin" />}
-                {isCreate ? "Створити датасет" : "Зберегти й імпортувати"}
+                {isCreate
+                  ? "Створити датасет"
+                  : isEdit
+                    ? "Зберегти конфіг"
+                    : "Зберегти й імпортувати"}
               </Button>
+              {isEdit && (
+                <span className="text-[11px] text-muted">
+                  Айтеми не видаляються — після збереження запусти ресинк.
+                </span>
+              )}
               {result && !result.ok && <span className="text-xs text-danger">{result.message}</span>}
             </div>
           )}

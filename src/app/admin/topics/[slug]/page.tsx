@@ -14,6 +14,7 @@ import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
 import { importPresetAction, toggleEntityAction } from "@/lib/admin/actions";
 import { requireSuperPage } from "@/lib/admin/guard";
+import type { TopicDef } from "@/lib/ingest/def";
 
 export const dynamic = "force-dynamic";
 const PAGE = 20;
@@ -30,14 +31,22 @@ export default async function AdminTopicPage({
   const { slug } = await params;
   const { page: pageParam, tab: tabParam } = await searchParams;
   const page = Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1);
-  const tab = tabParam === "games" ? "games" : tabParam === "sync" ? "sync" : "items";
+  const tab =
+    tabParam === "games"
+      ? "games"
+      : tabParam === "sync"
+        ? "sync"
+        : tabParam === "config"
+          ? "config"
+          : "items";
 
   const [topic] = await db.select().from(topics).where(eq(topics.slug, slug)).limit(1);
   if (!topic) notFound();
 
   // draft = created but no class/fields yet → show the setup builder
-  const sc = topic.sourceConfig as { def?: { fields?: unknown[] }; preset?: string } | null;
-  const isDef = !!sc?.def?.fields?.length;
+  const sc = topic.sourceConfig as { def?: TopicDef; preset?: string } | null;
+  const def = sc?.def;
+  const isDef = !!def?.fields?.length;
   const needsSetup = !sc?.preset && !isDef;
 
   if (needsSetup) {
@@ -94,7 +103,7 @@ export default async function AdminTopicPage({
     />
   );
 
-  const tabLink = (key: "items" | "games" | "sync", label: string) => (
+  const tabLink = (key: "items" | "games" | "sync" | "config", label: string) => (
     <Link
       href={key === "items" ? `/admin/topics/${slug}` : `/admin/topics/${slug}?tab=${key}`}
       className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
@@ -114,10 +123,41 @@ export default async function AdminTopicPage({
       <div className="flex gap-1 border-b border-line/60">
         {tabLink("items", `Айтеми (${itemsTotal})`)}
         {tabLink("games", `Ігри (${gameRows.length})`)}
+        {isDef && tabLink("config", "Налаштування")}
         {tabLink("sync", "Синхронізація")}
       </div>
 
-      {tab === "sync" ? (
+      {tab === "config" ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
+            <Settings2 size={14} /> Конфіг джерела — клас, фільтри, поля, мови
+          </h2>
+          {isDef && def ? (
+            <>
+              <p className="text-xs text-muted">
+                Правити можна будь-коли: айтеми не видаляються. Змінив поріг чи фільтри —
+                збережи й прожени ресинк на вкладці «Синхронізація».
+              </p>
+              <DatasetSetup
+                topicSlug={slug}
+                initial={{
+                  classQids: def.classQids ?? [],
+                  sitelinksMin: def.sitelinksMin ?? 0,
+                  fields: def.fields ?? [],
+                  locales: def.locales ?? ["en"],
+                  filters: def.filters ?? [],
+                  difficultyBy: def.difficultyBy,
+                  taxonMode: def.taxonMode,
+                }}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Це legacy-пресет — його конфіг заданий у коді, з адмінки не редагується.
+            </p>
+          )}
+        </section>
+      ) : tab === "sync" ? (
         <section className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wide text-muted">
             <Settings2 size={14} /> Синхронізація з Wikidata

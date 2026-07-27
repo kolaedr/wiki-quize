@@ -48,6 +48,38 @@ export async function searchClasses(query: string): Promise<ClassCandidate[]> {
     .map((s) => ({ qid: s.id, label: s.label ?? s.id, description: s.description }));
 }
 
+/**
+ * Resolve labels for ids we already have (Q… and P… mixed) — used when an
+ * EXISTING dataset config is reopened for editing: the DB stores bare QIDs, but
+ * the form must show "human (Q5)" rather than a naked id.
+ */
+export async function resolveLabels(ids: string[]): Promise<Record<string, string>> {
+  const clean = [...new Set(ids.filter((i) => /^[QP]\d+$/.test(i)))].slice(0, 50);
+  if (clean.length === 0) return {};
+  const url = new URL("https://www.wikidata.org/w/api.php");
+  url.search = new URLSearchParams({
+    action: "wbgetentities",
+    ids: clean.join("|"),
+    props: "labels",
+    languages: "en|uk",
+    format: "json",
+  }).toString();
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": SEARCH_UA, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`wbgetentities ${res.status}`);
+  const json = (await res.json()) as {
+    entities?: Record<string, { labels?: Record<string, { value?: string }> }>;
+  };
+  const out: Record<string, string> = {};
+  for (const [id, e] of Object.entries(json.entities ?? {}))
+    out[id] = e.labels?.uk?.value ?? e.labels?.en?.value ?? id;
+  return out;
+}
+
 export interface PropertyCandidate {
   /** e.g. "P27" */
   pid: string;
