@@ -33,7 +33,8 @@
   },
   "footer": {
     "portfolio": "Portfolio",
-    "language": "Language"
+    "language": "Language",
+    "admin": "Admin panel"
   },
   "me": {
     "played": "Games played",
