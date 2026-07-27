@@ -61,6 +61,7 @@ export default function AuthPage() {
       // honor ?redirect= (e.g. an invite/challenge link that sent us to auth)
       const raw = new URLSearchParams(window.location.search).get("redirect");
       router.push(raw && raw.startsWith("/") ? raw : "/");
+      router.refresh();
     }
   };
 

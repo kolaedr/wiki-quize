@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield } from "lucide-react";
+import { StaffAdminLink } from "@/components/staff-admin-link";
 import { UserButton } from "@/components/auth/user-button";
 
 /**
  * The global header. Hidden on /admin — the admin section has its own top bar
  * and sidebar (see admin/layout.tsx), so the product header would be redundant.
  */
-export function SiteHeaderInner({ admin }: { admin: boolean }) {
+export function SiteHeaderInner() {
   const pathname = usePathname();
   if (pathname.startsWith("/admin")) return null;
 
@@ -22,15 +22,7 @@ export function SiteHeaderInner({ admin }: { admin: boolean }) {
         WiQus
       </Link>
       <div className="flex items-center gap-2">
-        {admin && (
-          <Link
-            href="/admin"
-            title="Admin"
-            className="glass-card flex h-10 w-10 items-center justify-center text-muted transition-colors hover:text-accent"
-          >
-            <Shield size={17} />
-          </Link>
-        )}
+        <StaffAdminLink />
         <UserButton />
       </div>
     </header>
