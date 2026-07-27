@@ -42,6 +42,7 @@ export function GameEditor({
   icon,
   promptShow: promptShowInit = "",
   optionShow: optionShowInit = "",
+  promptBlur,
   mod = false,
 }: {
   gameId: string;
@@ -62,6 +63,8 @@ export function GameEditor({
   promptImage?: boolean;
   promptShow?: "" | "text" | "image" | "both";
   optionShow?: "" | "text" | "image" | "both";
+  /** blur radius (px) over the question image until answered */
+  promptBlur?: number;
   /** moderator view: only title + icon (no deck/visual/cover/delete) */
   mod?: boolean;
 }) {
@@ -84,6 +87,7 @@ export function GameEditor({
   const [vRole, setVRole] = useState(valueRole ?? "");
   const [pShow, setPShow] = useState<string>(promptShowInit);
   const [oShow, setOShow] = useState<string>(optionShowInit);
+  const [blur, setBlur] = useState<number>(promptBlur ?? 0);
   const [cov, setCov] = useState<CoverageResult | null>(null);
 
   const isRefChoice = mechanic === "choice" && !!refRole;
@@ -127,12 +131,14 @@ export function GameEditor({
         valueRole?: string | null;
         promptShow?: "" | "text" | "image" | "both";
         optionShow?: "" | "text" | "image" | "both";
+        promptBlur?: number;
       } = {};
       if (isRefChoice) patch.promptImageRole = pRole || null;
       if (isOwnChoice) patch.answerRole = aRole || null;
       if (isChoice) {
         patch.promptShow = pShow as "" | "text" | "image" | "both";
         patch.optionShow = oShow as "" | "text" | "image" | "both";
+        patch.promptBlur = blur;
       }
       if (isHL) {
         patch.imageRole = iRole || null;
@@ -213,7 +219,27 @@ export function GameEditor({
                 Варіанти показують
                 <ShowSelect value={oShow} onChange={setOShow} />
               </label>
+              <label className="flex flex-col gap-1">
+                Блюр питання
+                <select
+                  value={blur}
+                  onChange={(e) => setBlur(Number(e.target.value))}
+                  className="h-9 rounded-lg border border-line/60 bg-transparent px-2 text-xs text-fg outline-none focus:border-accent"
+                  title="Розмиває картинку питання до відповіді — коли зображення надто очевидне"
+                >
+                  <option value={0}>без блюру</option>
+                  <option value={5}>легкий</option>
+                  <option value={10}>середній</option>
+                  <option value={16}>сильний</option>
+                </select>
+              </label>
             </div>
+          )}
+          {isChoice && blur > 0 && (
+            <p className="text-[11px] text-muted">
+              Картинка питання буде розмита, а після відповіді проявиться. Для впізнаваних
+              речей (прапор, логотип) це і робить раунд цікавим.
+            </p>
           )}
 
           <div className="flex flex-wrap items-end gap-3 text-xs text-muted">

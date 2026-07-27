@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
-import { ResultScreen, StreakBadge } from "./hud";
+import { blurStyle, ResultScreen, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
 interface Props {
@@ -12,10 +12,11 @@ interface Props {
   onFinish?: (r: SessionResult) => void;
   nextHref?: string;
   backHref?: string;
+  promptBlur?: number;
 }
 
 /** Quad layout of the `choice` mechanic: big prompt card + 2×2 tap options. */
-export function GameBoard({ cards, onFinish, nextHref, backHref }: Props) {
+export function GameBoard({ cards, onFinish, nextHref, backHref, promptBlur }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const [imgFailed, setImgFailed] = useState(false);
@@ -58,6 +59,9 @@ export function GameBoard({ cards, onFinish, nextHref, backHref }: Props) {
                 src={card.prompt.image}
                 alt=""
                 onError={() => setImgFailed(true)}
+                // blurred until answered, then it resolves — that reveal is the
+                // point of the setting, not just a difficulty knob
+                style={blurStyle(promptBlur, !!s.picked)}
                 className="max-h-[64%] w-full rounded-xl object-contain drop-shadow-lg"
               />
             ) : card.prompt.emoji ? (

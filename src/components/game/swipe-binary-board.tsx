@@ -11,7 +11,7 @@ import { useTranslations } from "next-intl";
 import { Check, ImageOff, X } from "lucide-react";
 import type { BinaryCard } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
-import { ResultScreen, StreakBadge } from "./hud";
+import { blurStyle, ResultScreen, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
 
 const SWIPE_THRESHOLD = 90;
@@ -21,6 +21,7 @@ interface Props {
   onFinish?: (r: SessionResult) => void;
   nextHref?: string;
   backHref?: string;
+  promptBlur?: number;
 }
 
 /**
@@ -28,7 +29,7 @@ interface Props {
  * Swipe RIGHT = true, LEFT = false (the card itself flies away).
  * Mouse devices: ✗ / ✓ buttons. Keyboard: ← false, → true.
  */
-export function SwipeBinaryBoard({ cards, onFinish, nextHref, backHref }: Props) {
+export function SwipeBinaryBoard({ cards, onFinish, nextHref, backHref, promptBlur }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
@@ -129,6 +130,7 @@ export function SwipeBinaryBoard({ cards, onFinish, nextHref, backHref }: Props)
                 src={card.image}
                 alt=""
                 onError={() => setImgFailed(true)}
+                style={blurStyle(promptBlur, !!s.picked)}
                 className="max-h-[45%] max-w-[80%] rounded-lg object-contain drop-shadow-lg"
               />
             ) : card.image && imgFailed ? (

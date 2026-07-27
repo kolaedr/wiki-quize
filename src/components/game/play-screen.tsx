@@ -38,6 +38,8 @@ interface Props {
   levels?: number;
   /** where the back button leads (level map / catalog) */
   backHref?: string;
+  /** blur radius (px) over the question image until answered; 0/undefined = off */
+  promptBlur?: number;
 }
 
 /**
@@ -57,6 +59,7 @@ export function PlayScreen({
   level,
   levels,
   backHref = "/",
+  promptBlur,
 }: Props) {
   const t = useTranslations();
   const { layout, setLayout } = useSettings();
@@ -133,7 +136,7 @@ export function PlayScreen({
 
   const nextHref =
     slug && level && levels && level < levels ? `/play/${slug}/${level + 1}` : undefined;
-  const nav = { nextHref, backHref };
+  const nav = { nextHref, backHref, promptBlur };
 
   let board: React.ReactNode;
   if (mechanic === "swipe_binary" || (mechanic === "choice" && active === "single")) {

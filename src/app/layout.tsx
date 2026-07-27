@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { LocalePickerDialog } from "@/components/locale-picker-dialog";
+import { PageTransition } from "@/components/page-transition";
 import { SwRegister } from "@/components/sw-register";
 import { isLocale, LOCALE_COOKIE } from "@/i18n/locales";
 import { getSuggestedLocale } from "@/lib/locale-cookie";
@@ -84,7 +85,7 @@ export default async function RootLayout({
             <div className="mystic-bg" aria-hidden />
             <div className="app-shell">
               <SiteHeader />
-              <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+              <PageTransition>{children}</PageTransition>
               <SiteFooter />
             </div>
             <SwRegister />

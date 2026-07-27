@@ -16,6 +16,20 @@ import { MAX_STARS } from "@/stores/progress";
  * roughly one and a half rows of vertical space on a phone.
  */
 
+/**
+ * Blur for the question image (config `promptBlur`), cleared the moment an
+ * answer is picked. Inline style rather than a Tailwind class because the
+ * radius is admin-configurable, and JIT can't generate arbitrary values that
+ * only exist in the database.
+ */
+export function blurStyle(px: number | undefined, revealed: boolean): React.CSSProperties | undefined {
+  if (!px || px <= 0) return undefined;
+  return {
+    filter: revealed ? "blur(0px)" : `blur(${px}px)`,
+    transition: "filter 420ms ease-out",
+  };
+}
+
 export function Lives({ lives, maxLives }: { lives: number; maxLives: number }) {
   return (
     <span className="flex items-center gap-1" aria-label={`${lives}/${maxLives}`}>
