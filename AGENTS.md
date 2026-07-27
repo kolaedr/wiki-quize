@@ -116,7 +116,9 @@ Always finish with `npm run lint` and `npm run build` before opening a PR.
 
 - `npm run lint` currently reports **pre-existing** errors (mostly `react-hooks/set-state-in-effect`, e.g. `src/lib/use-coarse-pointer.ts`, `src/components/theme-toggle.tsx`). They are unrelated to most tasks — focus on not adding *new* lint errors rather than a clean exit code.
 - `next build` (Next 16) does **not** fail on those ESLint errors; a green build means TypeScript + compilation passed.
-- `npm run db:seed` validates every flag/logo image URL against Wikimedia before inserting (~1 min, network-bound); a built-in meta-guard trusts all URLs if validation looks rate-limited. Migrations and seeds are idempotent (upsert by slug), safe to re-run.
+- `npm run db:migrate` is safe/idempotent (tracked migrations).
+- **`npm run db:seed` is DESTRUCTIVE — do not run it against a database with real data.** It `DELETE`s and replaces all `topic_entities` for the `countries`, `car-brands`, and `car-models` topic slugs, overwrites the whole `limits` table with defaults, and upserts (overwrites `config`/`style`/`status`) the 10 starter game slugs. `npm run db:seed:categories` overwrites presentation metadata for its 55 category slugs. Only run these on a throwaway dev DB.
+- `npm run db:seed` also validates every flag/logo image URL against Wikimedia before inserting (~1 min, network-bound); a built-in meta-guard trusts all URLs if validation looks rate-limited.
 
 ---
 
