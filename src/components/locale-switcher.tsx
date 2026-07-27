@@ -2,19 +2,8 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { ACTIVE_LOCALES, isLocale, LOCALE_COOKIE, type Locale } from "@/i18n/locales";
-
-/** Flag + short label for each locale (emoji flags — no asset deps). */
-const LOCALES: Record<Locale, { flag: string; label: string }> = {
-  en: { flag: "🇬🇧", label: "EN" },
-  uk: { flag: "🇺🇦", label: "UA" },
-};
-
-const MAX_AGE = 60 * 60 * 24 * 365; // 1 year
-
-function setLocaleCookie(locale: Locale) {
-  document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=${MAX_AGE}; samesite=lax`;
-}
+import { ACTIVE_LOCALES, isLocale, type Locale } from "@/i18n/locales";
+import { LOCALE_META, setLocaleCookie } from "@/lib/locale-cookie";
 
 /** Compact flag toggle — writes cookie and refreshes RSC tree. */
 export function LocaleSwitcher() {
@@ -27,14 +16,14 @@ export function LocaleSwitcher() {
     <div role="group" aria-label={t("language")} className="flex items-center gap-1.5">
       {ACTIVE_LOCALES.map((code) => {
         const active = code === current;
-        const { flag, label } = LOCALES[code];
+        const { flag, short } = LOCALE_META[code];
         return (
           <button
             key={code}
             type="button"
             aria-pressed={active}
-            aria-label={label}
-            title={label}
+            aria-label={short}
+            title={short}
             onClick={() => {
               if (code === current) return;
               setLocaleCookie(code);
@@ -49,7 +38,7 @@ export function LocaleSwitcher() {
             <span className="text-base leading-none" aria-hidden>
               {flag}
             </span>
-            <span className="text-xs font-semibold tracking-wide">{label}</span>
+            <span className="text-xs font-semibold tracking-wide">{short}</span>
           </button>
         );
       })}
