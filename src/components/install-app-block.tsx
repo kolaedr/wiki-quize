@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Download, Share, SquarePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isStandalone } from "@/lib/pwa";
 
 const DISMISS_KEY = "wq-install-dismissed";
 
@@ -12,15 +13,6 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-function isStandalone(): boolean {
-  if (typeof window === "undefined") return true;
-  const iosStandalone =
-    "standalone" in navigator &&
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-  return (
-    window.matchMedia("(display-mode: standalone)").matches || iosStandalone
-  );
-}
 
 function isIosSafari(): boolean {
   if (typeof navigator === "undefined") return false;

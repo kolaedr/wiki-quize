@@ -3,11 +3,12 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ACTIVE_LOCALES, type Locale } from "@/i18n/locales";
+import { getLocalePickerCopy } from "@/i18n/locale-picker-copy";
 import { LOCALE_META, setLocaleCookie } from "@/lib/locale-cookie";
 
 /**
  * First-visit language picker — shown when no wq-locale cookie exists yet.
- * Two large flag buttons; choice persists via cookie + router.refresh().
+ * Title uses the suggested locale (Accept-Language); flags show native names.
  */
 export function LocalePickerDialog({
   open,
@@ -17,6 +18,7 @@ export function LocalePickerDialog({
   suggested: Locale;
 }) {
   const router = useRouter();
+  const copy = getLocalePickerCopy(suggested);
 
   useEffect(() => {
     if (!open) return;
@@ -46,15 +48,12 @@ export function LocalePickerDialog({
         className="glass-card flex w-full max-w-sm flex-col gap-5 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-center">
-          <h2
-            id="locale-picker-title"
-            className="font-display text-xl font-bold tracking-tight"
-          >
-            Choose language
-          </h2>
-          <p className="mt-1 text-sm text-muted">Оберіть мову</p>
-        </div>
+        <h2
+          id="locale-picker-title"
+          className="text-center font-display text-xl font-bold tracking-tight"
+        >
+          {copy.title}
+        </h2>
 
         <div className="grid grid-cols-2 gap-3">
           {ACTIVE_LOCALES.map((code) => {
