@@ -92,7 +92,7 @@ export function SwipeBinaryBoard({ cards, onFinish, nextHref, backHref, promptBl
       <div className="relative min-h-0 flex-1 touch-none select-none">
         {/* next card peeking underneath */}
         {cards[s.idx + 1] && (
-          <div className="glass-card absolute inset-x-6 bottom-2 top-6 rotate-2 opacity-40" />
+          <div className="play-card absolute inset-x-6 bottom-2 top-6 rotate-2 opacity-40" />
         )}
 
         <AnimatePresence mode="wait">
@@ -120,7 +120,7 @@ export function SwipeBinaryBoard({ cards, onFinish, nextHref, backHref, promptBl
             dragMomentum={false}
             style={{ x, rotate }}
             onDragEnd={onDragEnd}
-            className={`glass-card absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center ${
+            className={`play-card absolute inset-0 flex flex-col items-center justify-center gap-4 p-8 text-center ${
               answered ? (wasCorrect ? "border-success shadow-success ring-2 ring-success" : "border-danger") : ""
             } ${touch ? "cursor-grab active:cursor-grabbing" : ""}`}
           >

@@ -24,6 +24,10 @@ export function GameBoard({ cards, onFinish, nextHref, backHref, promptBlur }: P
   useEffect(() => setImgFailed(false), [s.idx]);
 
   const card = cards[s.idx];
+  // Picture options need a square to breathe in; text options only need a
+  // couple of lines. Sizing the grid to the CONTENT keeps the question card
+  // from hogging the screen when the answers are the visual part.
+  const visualOptions = !!card && card.options.some((o) => o.image);
   if (s.done || !card) {
     return (
       <ResultScreen
@@ -42,8 +46,8 @@ export function GameBoard({ cards, onFinish, nextHref, backHref, promptBlur }: P
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col px-4 pb-10">
-      {/* card */}
-      <div className="relative min-h-0 flex-1">
+      {/* card — capped when the options are pictures, so two rows of squares fit */}
+      <div className={`relative min-h-0 flex-1 ${visualOptions ? "max-h-[38%]" : ""}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={card.id}
@@ -51,7 +55,7 @@ export function GameBoard({ cards, onFinish, nextHref, backHref, promptBlur }: P
             animate={{ opacity: 1, y: 0, rotate: 0 }}
             exit={{ opacity: 0, y: -24, rotate: 2 }}
             transition={{ duration: 0.22 }}
-            className="glass-card absolute inset-0 flex flex-col items-center justify-center gap-3 p-6"
+            className="play-card absolute inset-0 flex flex-col items-center justify-center gap-3 p-6"
           >
             {card.prompt.image && !imgFailed ? (
               // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ emoji fallback
@@ -101,7 +105,9 @@ export function GameBoard({ cards, onFinish, nextHref, backHref, promptBlur }: P
               key={o.key}
               onClick={() => s.answer(o.key, isCorrect)}
               disabled={!!s.picked}
-              className={`glass-card flex min-h-[4.5rem] items-center justify-center px-3 py-3 text-center text-sm font-semibold transition-all active:scale-95 ${
+              className={`play-card flex items-center justify-center px-3 py-3 text-center text-sm font-semibold transition-all active:scale-95 ${
+                visualOptions ? "aspect-square" : "min-h-[4.5rem]"
+              } ${
                 state === "correct"
                   ? "border-success text-success shadow-success ring-2 ring-success"
                   : state === "wrong"
@@ -131,15 +137,17 @@ function OptionContent({ option }: { option: ChoiceOption }) {
   const [failed, setFailed] = useState(false);
   if (option.image && !failed) {
     return (
-      <span className="flex flex-col items-center gap-1">
+      <span className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1">
         {/* eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ text fallback */}
         <img
           src={option.image}
           alt=""
           onError={() => setFailed(true)}
-          className="max-h-14 max-w-full object-contain"
+          className="min-h-0 max-h-full max-w-full rounded-lg object-contain"
         />
-        {option.label && <span className="text-xs font-medium text-muted">{option.label}</span>}
+        {option.label && (
+          <span className="shrink-0 text-xs font-medium text-muted">{option.label}</span>
+        )}
       </span>
     );
   }

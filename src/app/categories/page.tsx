@@ -10,6 +10,7 @@ import { db } from "@/db";
 import { categories, games, topics } from "@/db/schema";
 import { resolveText } from "@/i18n/locales";
 import { categoryNodes } from "@/lib/deck/from-db";
+import { imageFrame } from "@/lib/image-frame";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export default async function CategoriesPage({
                 >
                   {c.image ? (
                     // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-                    <img src={c.image} alt="" className="h-14 w-[86%] rounded-lg object-contain" />
+                    <img src={c.image} alt="" className={`h-14 w-[86%] object-contain ${imageFrame()}`} />
                   ) : (
                     <GameIcon name={c.icon ?? undefined} size={30} box="h-14 w-14" />
                   )}
@@ -146,7 +147,7 @@ export default async function CategoriesPage({
           >
             {c.image ? (
               // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-              <img src={c.image} alt="" className="h-16 w-[86%] rounded-lg object-contain" />
+              <img src={c.image} alt="" className={`h-16 w-[86%] object-contain ${imageFrame()}`} />
             ) : (
               <GameIcon name={c.icon ?? undefined} size={32} box="h-16 w-16" />
             )}

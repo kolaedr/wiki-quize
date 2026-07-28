@@ -107,7 +107,9 @@
     "layoutDesc_quad": "Four options — tap the right one",
     "sound": "Sound",
     "soundOn": "Sound on — tap to mute",
-    "soundOff": "Muted — tap to unmute"
+    "soundOff": "Muted — tap to unmute",
+    "cards": "{count} cards",
+    "stacked": "Column"
   },
   "auth": {
     "signin": "Sign in",

@@ -37,6 +37,12 @@ export interface GameConfig {
    * 0/undefined = off.
    */
   promptBlur?: number;
+  /**
+   * Default the duel/trio layout to a COLUMN instead of side-by-side. For
+   * datasets whose pictures are wide (landscapes, buildings) two cards in a row
+   * squeeze each photo into a stamp.
+   */
+  stackedDefault?: boolean;
   /** choice over a relation: values[refRole] = [{qid, labels}] */
   refRole?: string;
   /** "parent" = reverse direction: prompt is the ref (brand), options are entities (models) */
@@ -72,6 +78,12 @@ export interface GameMeta {
 export interface GameDecks extends GameMeta {
   level: number;
   duelCards: ChoiceCard[];
+  /**
+   * Same as duel but with THREE options. A separate deck rather than slicing
+   * the quad one: options are shuffled, so trimming a 4-deck would sometimes
+   * cut the correct answer out of the round.
+   */
+  trioCards: ChoiceCard[];
   quadCards: ChoiceCard[];
   binaryCards: BinaryCard[];
 }
@@ -87,6 +99,7 @@ function parseConfig(raw: unknown): GameConfig {
     promptShow: c.promptShow,
     optionShow: c.optionShow,
     promptBlur: c.promptBlur,
+    stackedDefault: c.stackedDefault,
     refRole: c.refRole,
     refDirection: c.refDirection,
     promptImageRole: c.promptImageRole,
@@ -200,6 +213,7 @@ export async function loadGameDecks(
     ...meta,
     level: lvl,
     duelCards: [],
+    trioCards: [],
     quadCards: [],
     binaryCards: [],
   };
@@ -234,6 +248,12 @@ export async function loadGameDecks(
         refRole: cfg.refRole,
         optionCount: 2,
       });
+      result.trioCards = buildRefParentDeck(entities, {
+        ...base,
+        seed: `${slug}-L${lvl}-trio-${seed}`,
+        refRole: cfg.refRole,
+        optionCount: 3,
+      });
       result.quadCards = buildRefParentDeck(entities, {
         ...base,
         seed: `${slug}-L${lvl}-quad-${seed}`,
@@ -247,6 +267,15 @@ export async function loadGameDecks(
       seed: `${slug}-L${lvl}-duel-${seed}`,
       refRole: cfg.refRole,
       optionCount: 2,
+      promptImageRole: cfg.promptImageRole,
+      promptShow: cfg.promptShow,
+      optionShow: cfg.optionShow,
+    });
+    result.trioCards = buildRefChoiceDeck(entities, {
+      ...base,
+      seed: `${slug}-L${lvl}-trio-${seed}`,
+      refRole: cfg.refRole,
+      optionCount: 3,
       promptImageRole: cfg.promptImageRole,
       promptShow: cfg.promptShow,
       optionShow: cfg.optionShow,
@@ -300,6 +329,14 @@ export async function loadGameDecks(
       prompt: promptFn,
       option: optionFn,
     });
+    result.trioCards = buildChoiceDeck(withText, {
+      ...base,
+      questions: qWithText,
+      seed: `${slug}-L${lvl}-trio-${seed}`,
+      optionCount: 3,
+      prompt: promptFn,
+      option: optionFn,
+    });
     result.quadCards = buildChoiceDeck(withText, {
       ...base,
       questions: qWithText,
@@ -340,6 +377,14 @@ export async function loadGameDecks(
     questions: qWithRole,
     seed: `${slug}-L${lvl}-duel-${seed}`,
     optionCount: 2,
+    prompt: promptDuel,
+    option: optionDuel,
+  });
+  result.trioCards = buildChoiceDeck(withRole, {
+    ...base,
+    questions: qWithRole,
+    seed: `${slug}-L${lvl}-trio-${seed}`,
+    optionCount: 3,
     prompt: promptDuel,
     option: optionDuel,
   });

@@ -46,6 +46,7 @@ export function GameAdminCard({
     promptShow?: "text" | "image" | "both";
     optionShow?: "text" | "image" | "both";
     promptBlur?: number;
+    stackedDefault?: boolean;
   };
   const style = (g.style ?? {}) as { icon?: string; cover?: string };
 
@@ -108,6 +109,7 @@ export function GameAdminCard({
         promptShow={cfg.promptShow ?? ""}
         optionShow={cfg.optionShow ?? ""}
         promptBlur={cfg.promptBlur}
+        stackedDefault={cfg.stackedDefault}
         cover={style.cover}
         icon={style.icon}
         mod={mod}

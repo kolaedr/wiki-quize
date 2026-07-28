@@ -1,4 +1,5 @@
 import { GameIcon } from "@/components/game-icon";
+import { imageFrame } from "@/lib/image-frame";
 
 /**
  * Category cover in a FIXED-height box, so a grid of cards reads as one row of
@@ -37,7 +38,7 @@ export function CategoryThumb({
           <img
             src={image}
             alt=""
-            className="relative   h-full w-full object-contain p-2.5 drop-shadow-sm"
+            className={`relative h-full w-full object-contain drop-shadow-sm ${imageFrame("rounded-lg", "p-2.5")}`}
           />
         </>
       ) : (

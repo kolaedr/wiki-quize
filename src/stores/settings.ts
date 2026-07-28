@@ -21,6 +21,16 @@ interface SettingsState {
   sound: boolean;
   setSound: (on: boolean) => void;
   toggleSound: () => void;
+  /** duel layout: how many cards to choose from (2 = classic, 3 = harder) */
+  duelCount: 2 | 3;
+  setDuelCount: (n: 2 | 3) => void;
+  /**
+   * Stack the duel/trio cards in a COLUMN instead of side by side. Null = follow
+   * the game's own default (`config.stackedDefault`), which is what a dataset of
+   * wide photos wants; once the player touches the switch their choice wins.
+   */
+  stacked: boolean | null;
+  setStacked: (v: boolean | null) => void;
 }
 
 export const useSettings = create<SettingsState>()(
@@ -33,6 +43,10 @@ export const useSettings = create<SettingsState>()(
       sound: false,
       setSound: (sound) => set({ sound }),
       toggleSound: () => set((s) => ({ sound: !s.sound })),
+      duelCount: 2,
+      setDuelCount: (duelCount) => set({ duelCount }),
+      stacked: null,
+      setStacked: (stacked) => set({ stacked }),
     }),
     { name: "wq-settings" },
   ),

@@ -45,6 +45,7 @@ export default async function GameLevelPage({
       title={`${resolveText(decks.title, locale)} · ${decks.level}`}
       mechanic={mech}
       duelCards={decks.duelCards}
+      trioCards={decks.trioCards}
       quadCards={decks.quadCards}
       binaryCards={decks.binaryCards}
       gameId={decks.gameId}
@@ -53,6 +54,7 @@ export default async function GameLevelPage({
       level={decks.level}
       levels={decks.config.levels}
       promptBlur={decks.config.promptBlur}
+      stackedDefault={decks.config.stackedDefault}
       backHref={`/play/${decks.slug}`}
     />
   );
