@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ChevronRight, Gamepad2, Globe2, HelpCircle, Play, UserPlus } from "lucide-react";
 import { CategoryThumb } from "@/components/category-thumb";
+import { GameSearch } from "@/components/game-search";
 import { FeedbackBlock } from "@/components/feedback/feedback-block";
 import { InstallAppBlock } from "@/components/install-app-block";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,9 @@ export default async function Home() {
                   </Link>
                 ))}
             </div>
+
+            {/* jump straight to a game by name — the grid only shows eight */}
+            <GameSearch />
 
             {/* slim stats bar: how much there actually is to play right now */}
             {(stats.items > 0 || stats.games > 0) && (

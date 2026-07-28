@@ -31,7 +31,9 @@
     "installIosStep1": "Tap the Share button in Safari",
     "installIosStep2": "Scroll and choose “Add to Home Screen”",
     "installIosStep3": "Tap Add — the icon appears on your home screen",
-    "installGeneric": "In your browser menu, choose “Install app” or “Add to Home Screen”. On a phone it usually sits under Share or ⋮."
+    "installGeneric": "In your browser menu, choose “Install app” or “Add to Home Screen”. On a phone it usually sits under Share or ⋮.",
+    "searchGames": "Find a game by name…",
+    "searchClear": "Clear"
   },
   "footer": {
     "portfolio": "Portfolio",

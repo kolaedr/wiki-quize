@@ -96,6 +96,7 @@ body {
 body.game-active {
   overflow: hidden;
 }
+
 body.game-active .app-shell {
   height: 100dvh;
   overflow: hidden;
@@ -140,6 +141,12 @@ body.game-active .app-shell {
   border-radius: 1.25rem;
 }
 
+.white-card {
+  background: var(--surface);
+  border: 1px solid var(--border-c);
+  border-radius: 1.25rem;
+}
+
 /*
  * PLAYING CARD — the answer cards in a round. Always light with dark text, in
  * both themes, like a real deck: nearly every picture on them (flags, logos,
@@ -154,6 +161,7 @@ body.game-active .app-shell {
   color: #1d1733;
   border-radius: 1.25rem;
 }
+
 .play-card .text-muted {
   color: rgba(29, 23, 51, 0.55);
 }
