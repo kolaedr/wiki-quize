@@ -8,10 +8,10 @@ import type { BinaryCard, ChoiceCard } from "@/lib/deck/types";
 import { useGame } from "@/stores/game";
 import { useProgress } from "@/stores/progress";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
-import { useToast } from "@/stores/toast";
 import { useGameScrollLock } from "@/lib/use-scroll-lock";
 import { Toaster } from "@/components/toaster";
 import { GameBoard } from "./game-board";
+import { GameConfigPanel } from "./game-config-panel";
 import { Lives } from "./hud";
 import { GameProgressBar } from "./progress-bar";
 import { SwipeBinaryBoard } from "./swipe-binary-board";
@@ -26,6 +26,8 @@ interface Props {
   /** choice: layout is the user's setting; higher_lower always renders as duel; swipe_binary has its own board. */
   mechanic?: "choice" | "higher_lower" | "swipe_binary";
   duelCards?: ChoiceCard[];
+  /** duel with three options — used when the player raises the card count */
+  trioCards?: ChoiceCard[];
   quadCards?: ChoiceCard[];
   binaryCards?: BinaryCard[];
   /** Set for DB-backed games — finished sessions are persisted. */
@@ -40,6 +42,8 @@ interface Props {
   backHref?: string;
   /** blur radius (px) over the question image until answered; 0/undefined = off */
   promptBlur?: number;
+  /** game default for the column layout (config.stackedDefault) */
+  stackedDefault?: boolean;
 }
 
 /**
@@ -51,6 +55,7 @@ export function PlayScreen({
   title,
   mechanic = "choice",
   duelCards = [],
+  trioCards = [],
   quadCards = [],
   binaryCards = [],
   gameId,
@@ -60,12 +65,15 @@ export function PlayScreen({
   levels,
   backHref = "/",
   promptBlur,
+  stackedDefault = false,
 }: Props) {
   const t = useTranslations();
   const { layout, setLayout } = useSettings();
   const markCompleted = useProgress((s) => s.markCompleted);
   const recordScore = useProgress((s) => s.recordScore);
-  const showToast = useToast((s) => s.show);
+  const duelCount = useSettings((s) => s.duelCount);
+  const stackedPref = useSettings((s) => s.stacked);
+  const [configOpen, setConfigOpen] = useState(false);
   const setGameTitle = useGame((s) => s.setTitle);
   const resetGame = useGame((s) => s.reset);
   const lives = useGame((s) => s.lives);
@@ -123,26 +131,27 @@ export function PlayScreen({
   }
   const showLayoutSwitch = available.length > 1;
 
-  /** One button instead of a radio group: tap = next layout + a toast naming it. */
-  const cycleLayout = () => {
-    const i = available.indexOf(active);
-    const next = available[(i + 1) % available.length];
-    setLayout(next);
-    showToast({
-      title: t(`settings.layoutName_${next}`),
-      description: t(`settings.layoutDesc_${next}`),
-    });
-  };
 
   const nextHref =
     slug && level && levels && level < levels ? `/play/${slug}/${level + 1}` : undefined;
   const nav = { nextHref, backHref, promptBlur };
+  const stacked = stackedPref ?? stackedDefault;
+  // three-card duel falls back to the pair when the game couldn't build a trio
+  const duelDeck = duelCount === 3 && trioCards.length > 0 ? trioCards : duelCards;
 
   let board: React.ReactNode;
   if (mechanic === "swipe_binary" || (mechanic === "choice" && active === "single")) {
     board = <SwipeBinaryBoard key="single" cards={binaryCards} onFinish={onFinish} {...nav} />;
   } else if (mechanic === "higher_lower" || active === "duel") {
-    board = <SwipeDuelBoard key="duel" cards={duelCards} onFinish={onFinish} {...nav} />;
+    board = (
+      <SwipeDuelBoard
+        key={`duel-${duelDeck === trioCards ? 3 : 2}`}
+        cards={duelDeck}
+        stacked={stacked}
+        onFinish={onFinish}
+        {...nav}
+      />
+    );
   } else {
     board = <GameBoard key="quad" cards={quadCards} onFinish={onFinish} {...nav} />;
   }
@@ -167,10 +176,13 @@ export function PlayScreen({
         {showLayoutSwitch ? (
           <button
             type="button"
-            onClick={cycleLayout}
+            onClick={() => setConfigOpen((o) => !o)}
             aria-label={t("settings.layout")}
-            title={t(`settings.layoutName_${active}`)}
-            className="glass-card flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-accent transition-colors hover:text-fg"
+            aria-expanded={configOpen}
+            title={t("settings.layout")}
+            className={`glass-card flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+              configOpen ? "border-accent text-accent" : "text-accent hover:text-fg"
+            }`}
           >
             <LayoutIcon layout={active} />
           </button>
@@ -179,6 +191,14 @@ export function PlayScreen({
           <span className="h-10 w-10 shrink-0" aria-hidden />
         )}
       </div>
+
+      <GameConfigPanel
+        open={configOpen && showLayoutSwitch}
+        active={active}
+        available={available}
+        onPick={setLayout}
+        stackedDefault={stackedDefault}
+      />
 
       {board}
       <GameProgressBar />

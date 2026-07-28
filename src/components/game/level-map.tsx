@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Lock, Star } from "lucide-react";
 import { GameIcon } from "@/components/game-icon";
 import { MAX_STARS, useProgress } from "@/stores/progress";
+import { imageFrame } from "@/lib/image-frame";
 
 interface Props {
   slug: string;
@@ -51,7 +52,7 @@ export function LevelMap({
             <img
               src={cover}
               alt=""
-              className="h-14 w-16 shrink-0 rounded-lg object-contain"
+              className={`h-14 w-16 shrink-0 object-contain ${imageFrame()}`}
             />
           ) : (
             <GameIcon name={icon} size={28} />

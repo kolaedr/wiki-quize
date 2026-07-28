@@ -43,6 +43,7 @@ export function GameEditor({
   promptShow: promptShowInit = "",
   optionShow: optionShowInit = "",
   promptBlur,
+  stackedDefault,
   mod = false,
 }: {
   gameId: string;
@@ -65,6 +66,8 @@ export function GameEditor({
   optionShow?: "" | "text" | "image" | "both";
   /** blur radius (px) over the question image until answered */
   promptBlur?: number;
+  /** default the duel layout to a column (for datasets of wide photos) */
+  stackedDefault?: boolean;
   /** moderator view: only title + icon (no deck/visual/cover/delete) */
   mod?: boolean;
 }) {
@@ -88,6 +91,7 @@ export function GameEditor({
   const [pShow, setPShow] = useState<string>(promptShowInit);
   const [oShow, setOShow] = useState<string>(optionShowInit);
   const [blur, setBlur] = useState<number>(promptBlur ?? 0);
+  const [stackDef, setStackDef] = useState<boolean>(!!stackedDefault);
   const [cov, setCov] = useState<CoverageResult | null>(null);
 
   const isRefChoice = mechanic === "choice" && !!refRole;
@@ -132,6 +136,7 @@ export function GameEditor({
         promptShow?: "" | "text" | "image" | "both";
         optionShow?: "" | "text" | "image" | "both";
         promptBlur?: number;
+        stackedDefault?: boolean;
       } = {};
       if (isRefChoice) patch.promptImageRole = pRole || null;
       if (isOwnChoice) patch.answerRole = aRole || null;
@@ -139,6 +144,7 @@ export function GameEditor({
         patch.promptShow = pShow as "" | "text" | "image" | "both";
         patch.optionShow = oShow as "" | "text" | "image" | "both";
         patch.promptBlur = blur;
+        patch.stackedDefault = stackDef;
       }
       if (isHL) {
         patch.imageRole = iRole || null;
@@ -234,6 +240,21 @@ export function GameEditor({
                 </select>
               </label>
             </div>
+          )}
+          {isChoice && (
+            <label className="flex items-start gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={stackDef}
+                onChange={(e) => setStackDef(e.target.checked)}
+              />
+              <span>
+                Дабл-режим за замовчуванням у стовпчик. Для датасетів із
+                ГОРИЗОНТАЛЬНИМИ фото (краєвиди, будівлі) — дві картки в ряд
+                стискають кожне фото до марки. Гравець може перевизначити.
+              </span>
+            </label>
           )}
           {isChoice && blur > 0 && (
             <p className="text-[11px] text-muted">

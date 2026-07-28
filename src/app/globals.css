@@ -15,6 +15,8 @@
   --bg-deep: #efecf8;
   --surface: #ffffff;
   --card: rgba(255, 255, 255, 0.72);
+  /* playing cards stay light in both themes — see .play-card */
+  --play-card: #f7f7fa;
   --border-c: rgba(80, 62, 140, 0.14);
   --fg: #1d1733;
   --muted: #6d6590;
@@ -31,6 +33,8 @@
   --bg-deep: #06050c;
   --surface: #14111f;
   --card: rgba(24, 20, 38, 0.72);
+  /* muted grey, NOT white: a white card on a dark page glares at night */
+  --play-card: #c8c5d2;
   --border-c: rgba(158, 134, 255, 0.14);
   --fg: #ece9f8;
   --muted: #8d86ab;
@@ -134,4 +138,22 @@ body.game-active .app-shell {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-radius: 1.25rem;
+}
+
+/*
+ * PLAYING CARD — the answer cards in a round. Always light with dark text, in
+ * both themes, like a real deck: nearly every picture on them (flags, logos,
+ * coats of arms) is drawn for a white page, and a dark card swallowed the
+ * outlines. Keeping them light also stops the round from re-styling itself
+ * when the player flips the theme mid-game.
+ * Only the CARDS behave this way — catalogue tiles stay themed.
+ */
+.play-card {
+  background: var(--play-card);
+  border: 1px solid rgba(80, 62, 140, 0.16);
+  color: #1d1733;
+  border-radius: 1.25rem;
+}
+.play-card .text-muted {
+  color: rgba(29, 23, 51, 0.55);
 }

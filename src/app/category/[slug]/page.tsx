@@ -8,6 +8,7 @@ import { Pagination } from "@/components/pagination";
 import { resolveText } from "@/i18n/locales";
 import { getStaff } from "@/lib/admin/guard";
 import { loadCategoryPage } from "@/lib/deck/from-db";
+import { imageFrame } from "@/lib/image-frame";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function CategoryPage({
         <div className="flex items-center gap-3">
           {data.image ? (
             // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-            <img src={data.image} alt="" className="h-12 w-16 rounded-lg object-contain" />
+            <img src={data.image} alt="" className={`h-12 w-16 object-contain ${imageFrame()}`} />
           ) : (
             <GameIcon name={data.icon} size={28} />
           )}
@@ -64,7 +65,7 @@ export default async function CategoryPage({
               >
                 {c.image ? (
                   // eslint-disable-next-line @next/next/no-img-element -- Commons thumb
-                  <img src={c.image} alt="" className="h-14 w-[86%] rounded-lg object-contain" />
+                  <img src={c.image} alt="" className={`h-14 w-[86%] object-contain ${imageFrame()}`} />
                 ) : (
                   <GameIcon name={c.icon} size={30} box="h-14 w-14" />
                 )}
@@ -92,7 +93,7 @@ export default async function CategoryPage({
               <img
                 src={(g.style as { cover?: string }).cover}
                 alt=""
-                className="h-20 w-[90%] rounded-lg object-contain"
+                className={`h-20 w-[90%] object-contain ${imageFrame()}`}
               />
             ) : (
               <GameIcon name={(g.style as { icon?: string })?.icon} size={32} box="h-16 w-16" />

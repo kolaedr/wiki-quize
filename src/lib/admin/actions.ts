@@ -291,6 +291,8 @@ interface VisualPatch {
   optionShow?: "text" | "image" | "both" | "";
   /** blur radius (px) over the question image until answered; 0 = off */
   promptBlur?: number;
+  /** default the duel layout to a column (wide photos) */
+  stackedDefault?: boolean;
 }
 
 /**
@@ -351,6 +353,10 @@ export async function setGameVisualAction(
     };
     applyShow("promptShow");
     applyShow("optionShow");
+    if (patch.stackedDefault !== undefined) {
+      if (patch.stackedDefault) cfg.stackedDefault = true;
+      else delete cfg.stackedDefault;
+    }
     if (patch.promptBlur !== undefined) {
       // clamp: past ~24px the picture is mush and the round is unwinnable
       const px = Math.max(0, Math.min(24, Math.round(Number(patch.promptBlur) || 0)));

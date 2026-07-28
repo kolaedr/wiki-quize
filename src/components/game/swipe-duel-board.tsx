@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AnimatePresence,
   motion,
@@ -13,9 +14,22 @@ import type { ChoiceCard, ChoiceOption } from "@/lib/deck/types";
 import { useCoarsePointer } from "@/lib/use-coarse-pointer";
 import { blurStyle, ResultScreen, StreakBadge } from "./hud";
 import { useGameSession, type SessionResult } from "./use-game-session";
+import { imageFrame } from "@/lib/image-frame";
 
 const THROW_DISTANCE = 110;
 const THROW_VELOCITY = 900;
+/** Fan geometry — how far the hand splays and how much the cards overlap. */
+const FAN_SPREAD_DEG = 11;
+/** px each step out from the middle drops, so the hand curves */
+const FAN_ARC_PX = 10;
+/** px of horizontal bite taken out of the gap between neighbours */
+const FAN_OVERLAP_PX = 34;
+/** corner letters, like a real deck */
+const PIPS = ["A", "B", "C", "D"];
+/** hold this long to blow the card up for a proper look */
+const LONG_PRESS_MS = 420;
+/** a finger that travels this far is dragging, not holding */
+const LONG_PRESS_SLOP_PX = 10;
 
 interface Props {
   /** Cards built with optionCount: 2 — prompt on top, a pair of cards "in hand". */
@@ -24,6 +38,8 @@ interface Props {
   nextHref?: string;
   backHref?: string;
   promptBlur?: number;
+  /** lay the cards out in a COLUMN instead of side by side */
+  stacked?: boolean;
 }
 
 /**
@@ -32,7 +48,7 @@ interface Props {
  * throw it (distance or flick velocity) to pick it — it flies off with
  * your throw's momentum. Tap/click also picks. Keyboard: ← →.
  */
-export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur }: Props) {
+export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur, stacked = false }: Props) {
   const t = useTranslations("game");
   const s = useGameSession(cards.length, onFinish);
   const touch = useCoarsePointer();
@@ -67,8 +83,8 @@ export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur
     >
       {/* prompt (image + label — e.g. brand logo above the brand name) */}
       <div
-        className={`flex flex-col items-center justify-center gap-1 text-center ${
-          card.prompt.image ? "h-64" : "h-24"
+        className={`flex shrink-0 flex-col items-center justify-center gap-1 text-center ${
+          card.prompt.image ? (stacked ? "h-44" : "h-64") : "h-24"
         }`}
       >
         <AnimatePresence mode="wait">
@@ -87,7 +103,7 @@ export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur
                 src={card.prompt.image}
                 alt=""
                 style={blurStyle(promptBlur, !!s.picked)}
-                className="max-h-52 w-[80vw] max-w-md object-contain drop-shadow-lg"
+                className={`max-h-52 ${stacked ? "w-[70%]" : "w-[80vw]"} max-w-md object-contain drop-shadow-lg ${imageFrame("rounded-xl")}`}
               />
             )}
             {(card.prompt.label || card.prompt.tmpl) && (
@@ -113,7 +129,10 @@ export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur
         </AnimatePresence>
       </div>
 
-      {/* the hand: two tilted cards, each one REALLY draggable */}
+      {/* the hand: tilted cards, each one REALLY draggable.
+          STACKED mode drops the fan and lists them vertically — a wide photo
+          in a 44%-wide portrait card is a stamp, and geography decks are
+          almost all landscape. */}
       <div className="relative min-h-0 flex-1 touch-none select-none">
         <AnimatePresence mode="wait">
           <motion.div
@@ -122,13 +141,21 @@ export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="flex h-full items-center justify-center"
+            className={
+              stacked
+                ? "flex h-full min-h-0 flex-col items-center justify-center gap-2"
+                : // items-end + bottom-origin rotation = a hand of cards: the
+                  // bottoms bunch together, the tops splay open
+                  "flex h-full items-end justify-center pb-6"
+            }
           >
             {card.options.map((o, i) => (
               <ThrowableCard
                 key={o.key}
                 option={o}
-                side={i === 0 ? "left" : "right"}
+                index={i}
+                count={card.options.length}
+                stacked={stacked}
                 picked={s.picked}
                 correctKey={card.correctKey}
                 onPick={() => pick(o)}
@@ -150,24 +177,81 @@ export function SwipeDuelBoard({ cards, onFinish, nextHref, backHref, promptBlur
  */
 function ThrowableCard({
   option,
-  side,
+  index,
+  count,
+  stacked = false,
   picked,
   correctKey,
   onPick,
 }: {
   option: ChoiceOption;
-  side: "left" | "right";
+  index: number;
+  count: number;
+  stacked?: boolean;
   picked: string | null;
   correctKey: string;
   onPick: () => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const [thrown, setThrown] = useState<{ x: number; y: number; rotate: number } | null>(null);
-  const left = side === "left";
-  const baseRotate = left ? -8 : 8;
+  const [zoom, setZoom] = useState(false);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+  // set when a long press fired, so the pointerup that follows doesn't ALSO
+  // count as picking this card
+  const suppressClick = useRef(false);
+
+  /**
+   * FAN GEOMETRY. Offset from the middle of the hand drives everything: the
+   * tilt, and an extra drop for the outer cards so the row curves instead of
+   * sitting on one line. Rotation happens about the BOTTOM of each card, so
+   * the bottoms stay bunched while the tops open out — which is what a hand of
+   * cards actually looks like. z-index climbs left→right so every card laps
+   * the one before it.
+   */
+  const centre = index - (count - 1) / 2;
+  const baseRotate = stacked ? 0 : centre * FAN_SPREAD_DEG;
+  const arcDrop = stacked ? 0 : Math.abs(centre) * FAN_ARC_PX;
 
   const dx = useMotionValue(0);
   const dragTilt = useTransform(dx, [-160, 160], [-14, 14]);
+
+  const clearPress = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+    pressOrigin.current = null;
+  };
+
+  // hold still for a moment → blow the picture up. A finger that moves is
+  // dragging the card instead, so any real movement cancels it.
+  const startPress = (e: React.PointerEvent) => {
+    if (picked || thrown || !option.image || imgFailed) return;
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
+    pressTimer.current = setTimeout(() => {
+      suppressClick.current = true;
+      setZoom(true);
+    }, LONG_PRESS_MS);
+  };
+  const movePress = (e: React.PointerEvent) => {
+    const o = pressOrigin.current;
+    if (!o) return;
+    if (Math.hypot(e.clientX - o.x, e.clientY - o.y) > LONG_PRESS_SLOP_PX) clearPress();
+  };
+
+  useEffect(() => clearPress, []);
+
+  // portals need a real document; this only ever flips once, on mount
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- no cascade: fires once
+  useEffect(() => setMounted(true), []);
+
+  // Escape closes the peek (desktop)
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setZoom(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoom]);
 
   const isCorrect = option.key === correctKey;
   const state = !picked
@@ -181,17 +265,38 @@ function ThrowableCard({
   return (
     // static wrapper keeps the resting hand-tilt; inner card moves freely
     <div
-      className={`w-[44%] max-w-52 ${left ? "-mr-4 z-[1]" : "-ml-4"}`}
-      style={{ rotate: `${baseRotate}deg`, transformOrigin: "bottom center" }}
+      className={stacked ? "min-h-0 w-full max-w-sm flex-1" : "w-[46%] max-w-52"}
+      style={
+        stacked
+          ? undefined
+          : {
+              rotate: `${baseRotate}deg`,
+              translate: `0 ${arcDrop}px`,
+              transformOrigin: "bottom center",
+              marginLeft: index === 0 ? 0 : -FAN_OVERLAP_PX,
+              zIndex: index + 1,
+            }
+      }
     >
       <motion.button
-        onClick={() => !thrown && onPick()}
+        onClick={() => {
+          if (suppressClick.current) {
+            suppressClick.current = false;
+            return;
+          }
+          if (!thrown) onPick();
+        }}
+        onPointerDown={startPress}
+        onPointerMove={movePress}
+        onPointerUp={clearPress}
+        onPointerCancel={clearPress}
         disabled={!!picked}
         drag={!picked && !thrown}
         dragSnapToOrigin
         dragElastic={0.9}
         dragMomentum={false}
         style={{ x: dx }}
+        onDragStart={clearPress}
         onDragEnd={(_, info) => {
           const dist = Math.hypot(info.offset.x, info.offset.y);
           const vel = Math.hypot(info.velocity.x, info.velocity.y);
@@ -213,7 +318,7 @@ function ThrowableCard({
         transition={thrown ? { duration: 0.45, ease: [0.2, 0.6, 0.4, 1] } : undefined}
         whileDrag={{ scale: 1.12, rotate: 0, zIndex: 40, cursor: "grabbing" }}
         whileHover={!picked ? { y: -10, scale: 1.04 } : undefined}
-        className={`glass-card relative block aspect-[5/7] w-full cursor-grab p-3 shadow-xl transition-all ${
+        className={`play-card relative block w-full cursor-grab shadow-xl transition-all ${stacked ? "h-full px-4 py-2.5" : "aspect-[5/7] p-3"} ${
           state === "correct"
             ? "border-success shadow-success ring-2 ring-success"
             : state === "wrong"
@@ -225,7 +330,13 @@ function ThrowableCard({
       >
         {/* live tilt while dragging */}
         <motion.span style={{ rotate: dragTilt }} className="flex h-full w-full">
-          <span className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-lg border border-line/60 p-2">
+          {/* content box only — no border of its own: the card already is one,
+              and nesting outlines turned every option into a box in a box */}
+          <span
+            className={`flex h-full w-full min-h-0 flex-col items-center justify-center ${
+              stacked ? "gap-1" : "gap-2"
+            }`}
+          >
             {option.image && !imgFailed ? (
               // eslint-disable-next-line @next/next/no-img-element -- Commons hotlink w/ emoji fallback
               <img
@@ -233,7 +344,9 @@ function ThrowableCard({
                 alt=""
                 draggable={false}
                 onError={() => setImgFailed(true)}
-                className="pointer-events-none max-h-[70%] max-w-full rounded-md object-contain drop-shadow-lg"
+                className={`pointer-events-none min-h-0 max-w-full rounded-md object-contain drop-shadow-lg ${
+                  stacked ? "max-h-full" : "max-h-[70%]"
+                }`}
               />
             ) : option.emoji ? (
               <span className="text-6xl">{option.emoji}</span>
@@ -241,7 +354,7 @@ function ThrowableCard({
               <ImageOff size={40} className="text-muted opacity-50" />
             ) : null}
             {option.label && (
-              <span className="text-center text-sm font-semibold leading-tight">
+              <span className="shrink-0 text-center text-sm font-semibold leading-tight">
                 {option.label}
               </span>
             )}
@@ -250,12 +363,47 @@ function ThrowableCard({
 
         {/* playing-card corner pips */}
         <span className="absolute left-2.5 top-2 font-display text-xs font-bold text-muted">
-          {left ? "A" : "B"}
+          {PIPS[index] ?? index + 1}
         </span>
         <span className="absolute bottom-2 right-2.5 rotate-180 font-display text-xs font-bold text-muted">
-          {left ? "A" : "B"}
+          {PIPS[index] ?? index + 1}
         </span>
       </motion.button>
+
+      {/* Long-press peek: many pictures are only readable full-screen.
+          PORTALLED to <body> on purpose — the wrapper above carries the fan
+          rotation, and a transformed ancestor turns `position: fixed` into
+          "fixed relative to that card", which would pin the overlay to a
+          tilted 46%-wide box instead of the screen. */}
+      {mounted &&
+        createPortal(
+          <AnimatePresence>
+            {zoom && option.image && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={() => setZoom(false)}
+                className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/85 p-5"
+              >
+                <motion.img
+                  initial={{ scale: 0.9 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 22 }}
+                  src={option.image}
+                  alt=""
+                  draggable={false}
+                  className="max-h-[75vh] max-w-full rounded-xl bg-neutral-200 object-contain p-2"
+                />
+                {option.label && (
+                  <span className="font-display text-lg font-bold text-white">{option.label}</span>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
     </div>
   );
 }
