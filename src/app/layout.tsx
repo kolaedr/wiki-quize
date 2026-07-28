@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { LocalePickerDialog } from "@/components/locale-picker-dialog";
 import { PageTransition } from "@/components/page-transition";
+import { QueryProvider } from "@/components/query-provider";
 import { SwRegister } from "@/components/sw-register";
 import { isLocale, LOCALE_COOKIE } from "@/i18n/locales";
 import { getSuggestedLocale } from "@/lib/locale-cookie";
@@ -82,6 +83,7 @@ export default async function RootLayout({
         />
         <ThemeProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
+            <QueryProvider>
             <div className="mystic-bg" aria-hidden />
             <div className="app-shell">
               <SiteHeader />
@@ -90,6 +92,7 @@ export default async function RootLayout({
             </div>
             <SwRegister />
             <LocalePickerDialog open={needsLocalePick} suggested={suggestedLocale} />
+            </QueryProvider>
           </NextIntlClientProvider>
         </ThemeProvider>
       </body>

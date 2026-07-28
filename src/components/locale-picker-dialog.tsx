@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Dialog } from "@/components/ui/dialog";
 import { ACTIVE_LOCALES, type Locale } from "@/i18n/locales";
 import { getLocalePickerCopy } from "@/i18n/locale-picker-copy";
 import { LOCALE_META, setLocaleCookie } from "@/lib/locale-cookie";
@@ -20,43 +20,18 @@ export function LocalePickerDialog({
   const router = useRouter();
   const copy = getLocalePickerCopy(suggested);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  if (!open) return null;
-
   const pick = (locale: Locale) => {
     setLocaleCookie(locale);
     router.refresh();
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      aria-hidden={false}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="locale-picker-title"
-        className="glass-card flex w-full max-w-sm flex-col gap-5 p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2
-          id="locale-picker-title"
-          className="text-center font-display text-xl font-bold tracking-tight"
-        >
-          {copy.title}
-        </h2>
+    // not dismissible: the app needs a language before anything reads right
+    <Dialog open={open} onClose={() => {}} hideClose dismissible={false} className="gap-5 p-6">
+      <h2 className="text-center font-display text-xl font-bold tracking-tight">{copy.title}</h2>
 
-        <div className="grid grid-cols-2 gap-3">
-          {ACTIVE_LOCALES.map((code) => {
+      <div className="grid grid-cols-2 gap-3">
+        {ACTIVE_LOCALES.map((code) => {
             const { flag, native } = LOCALE_META[code];
             const isSuggested = code === suggested;
             return (
@@ -77,8 +52,7 @@ export function LocalePickerDialog({
               </button>
             );
           })}
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

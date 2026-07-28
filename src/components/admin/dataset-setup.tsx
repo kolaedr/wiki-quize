@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Lightbulb, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -115,9 +116,12 @@ function fieldsFrom(props: ProbeField[]): TopicFieldDef[] {
 function FilterBuilder({
   filters,
   onChange,
+  label = (_id: string, fallback: string) => fallback,
 }: {
   filters: ActiveFilter[];
   onChange: (f: ActiveFilter[]) => void;
+  /** resolves a QID/PID to a human label once the lookup lands */
+  label?: (id: string, fallback: string) => string;
 }) {
   const [propQuery, setPropQuery] = useState("");
   const [propCands, setPropCands] = useState<PropertyCandidate[] | null>(null);
@@ -168,7 +172,7 @@ function FilterBuilder({
               key={`${f.prop}-${f.valueQid}`}
               className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-accent"
             >
-              {f.propLabel} = {f.valueLabel}
+              {label(f.prop, f.propLabel)} = {label(f.valueQid, f.valueLabel)}
               <span className="text-[10px] opacity-70">
                 {f.prop}={f.valueQid}
               </span>
@@ -318,9 +322,6 @@ export function DatasetSetup({
   const [difficultyBy, setDifficultyBy] = useState(initial?.difficultyBy ?? ""); // "" = popularity
   const [facets, setFacets] = useState<Facet[] | null>(null);
   const [loadingFacets, startFacets] = useTransition();
-  const [roleHint, setRoleHint] = useState<
-    { qid: string; label: string; occupation: number; position: number } | null
-  >(null);
   const [locales, setLocales] = useState<Set<string>>(
     () => new Set(initial ? initial.locales.filter((l) => l !== "en") : ["uk"]),
   );
@@ -331,6 +332,9 @@ export function DatasetSetup({
   const [result, setResult] = useState<ActionResult | null>(null);
   const [saved, setSaved] = useState(false); // config saved → run batched import
 
+  // labels land from the query; decorate at render instead of writing them back
+  // into state, which is what forced the old cancelled-flag effect
+  const label = (id: string, fallback: string) => labelMap?.[id] ?? fallback;
   const classCsv = classItems.map((c) => c.qid).join(", ");
   const classQids = classItems.map((c) => c.qid);
   const filterPayload: Filter[] = [
@@ -363,56 +367,46 @@ export function DatasetSetup({
     if (isCreate && !nameEn.trim()) setNameEn(c.label); // auto-suggest the name
   };
 
-  // EDIT mode: the DB only stores ids — fetch human labels once so the chips
-  // read "human (Q5)" / "громадянство = Україна" instead of raw QIDs.
-  useEffect(() => {
-    if (!initial) return;
-    const ids = [
-      ...initial.classQids,
-      ...initial.filters.flatMap((f) => [f.prop, f.valueQid].filter(Boolean)),
-    ];
-    if (ids.length === 0) return;
-    let cancelled = false;
-    resolveLabelsAction(ids).then((r) => {
-      if (cancelled || !r.ok || !r.labels) return; // labels are cosmetic — ignore failures
-      const map = r.labels;
-      setClassItems((xs) => xs.map((c) => ({ ...c, label: map[c.qid] ?? c.label })));
-      setFilters((fs) =>
-        fs.map((f) => ({
-          ...f,
-          propLabel: map[f.prop] ?? f.propLabel,
-          valueLabel: map[f.valueQid] ?? f.valueLabel,
-        })),
-      );
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /**
+   * EDIT mode: the DB only stores ids, so fetch human labels for the chips —
+   * "human (Q5)" instead of a bare QID. A query, not an effect: the cancelled
+   * flag, the manual state copy and the "fire once" dance all come free, and
+   * reopening the form hits the cache.
+   */
+  const labelIds = initial
+    ? [
+        ...initial.classQids,
+        ...initial.filters.flatMap((f) => [f.prop, f.valueQid].filter(Boolean)),
+      ]
+    : [];
+  const { data: labelMap } = useQuery({
+    queryKey: ["admin", "labels", labelIds],
+    queryFn: async () => (await resolveLabelsAction(labelIds)).labels ?? {},
+    enabled: labelIds.length > 0,
+    staleTime: Infinity, // Wikidata labels don't move
+  });
 
-  // detect "role, not a class of people" (e.g. picked "president" concept)
-  useEffect(() => {
-    setRoleHint(null);
-    if (classItems.length !== 1) return;
-    const c = classItems[0];
-    if (c.qid === "Q5") return; // "human" itself is fine
-    let cancelled = false;
-    roleCheckAction(c.qid).then((r) => {
-      if (cancelled || !r.ok) return;
-      if (Math.max(r.occupation ?? 0, r.position ?? 0) >= 20)
-        setRoleHint({
-          qid: c.qid,
-          label: c.label,
-          occupation: r.occupation ?? 0,
-          position: r.position ?? 0,
-        });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classItems]);
+  /**
+   * "That's a ROLE, not a class of people" hint (picking the concept
+   * "president" instead of humans who held it). Derived from a query keyed by
+   * the chosen class, so it can't linger from a previous selection the way the
+   * old effect-plus-setState version could.
+   */
+  const soleClass = classItems.length === 1 ? classItems[0] : null;
+  const { data: roleCheck } = useQuery({
+    queryKey: ["admin", "role-check", soleClass?.qid],
+    queryFn: () => roleCheckAction(soleClass!.qid),
+    enabled: !!soleClass && soleClass.qid !== "Q5", // "human" itself is fine
+  });
+  const roleHint =
+    soleClass && roleCheck?.ok && Math.max(roleCheck.occupation ?? 0, roleCheck.position ?? 0) >= 20
+      ? {
+          qid: soleClass.qid,
+          label: soleClass.label,
+          occupation: roleCheck.occupation ?? 0,
+          position: roleCheck.position ?? 0,
+        }
+      : null;
 
   const applyRole = () => {
     if (!roleHint) return;
@@ -425,7 +419,8 @@ export function DatasetSetup({
     setPicked(new Set());
     setTotal(null);
     if (isCreate && !nameEn.trim()) setNameEn(roleHint.label);
-    setRoleHint(null);
+    // no reset needed: the hint is derived from classItems, and we just
+    // replaced them with Q5 — it disappears on its own
   };
 
   const runSearch = () =>
@@ -593,7 +588,7 @@ export function DatasetSetup({
               key={c.qid}
               className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs text-accent"
             >
-              {c.label}
+              {label(c.qid, c.label)}
               <span className="text-[10px] opacity-70">{c.qid}</span>
               <button
                 type="button"
@@ -688,7 +683,7 @@ export function DatasetSetup({
       )}
 
       {/* optional narrowing filters (e.g. citizenship = Ukraine) */}
-      <FilterBuilder filters={filters} onChange={setFilters} />
+      <FilterBuilder filters={filters} onChange={setFilters} label={label} />
 
       <label className="flex items-center gap-2 text-xs text-muted">
         <input type="checkbox" checked={photoOnly} onChange={(e) => setPhotoOnly(e.target.checked)} />

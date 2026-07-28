@@ -54,7 +54,7 @@ export function SiteFooter() {
         ) : (
           <span aria-hidden className="w-px shrink-0" />
         )}
-        <a
+        {/* <a
           href={PORTFOLIO_URL}
           target="_blank"
           rel="noopener noreferrer"
@@ -62,7 +62,7 @@ export function SiteFooter() {
         >
           {t("portfolio")}
           <ExternalLink size={14} aria-hidden />
-        </a>
+        </a> */}
       </div>
     </footer>
   );

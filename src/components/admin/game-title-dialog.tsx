@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ACTIVE_LOCALES, type LocalizedText } from "@/i18n/locales";
 import { setGameTitleAction } from "@/lib/admin/actions";
@@ -50,12 +51,6 @@ export function GameTitleDialog({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const set = (code: string, v: string) => setValues((s) => ({ ...s, [code]: v }));
 
   const addLocale = () => {
@@ -93,25 +88,8 @@ export function GameTitleDialog({
   ];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Назва гри"
-        className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-line bg-bg p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="font-display text-lg font-bold">Назва гри</h3>
-          <button type="button" onClick={onClose} aria-label="Закрити">
-            <X size={18} className="text-muted hover:text-fg" />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-2">
+    <Dialog open onClose={onClose} title="Назва гри">
+      <div className="flex flex-col gap-2">
           {codes.map((code) => {
             const required = code === "en";
             return (
@@ -159,16 +137,15 @@ export function GameTitleDialog({
 
         {error && <p className="text-xs text-danger">{error}</p>}
 
-        <div className="flex items-center gap-2">
-          <Button className="flex-1" onClick={save} disabled={pending || !values.en?.trim()}>
-            {pending && <Loader2 size={14} className="animate-spin" />}
-            Зберегти
-          </Button>
-          <Button variant="ghost" onClick={onClose} disabled={pending}>
-            Скасувати
-          </Button>
-        </div>
+      <div className="flex items-center gap-2">
+        <Button className="flex-1" onClick={save} disabled={pending || !values.en?.trim()}>
+          {pending && <Loader2 size={14} className="animate-spin" />}
+          Зберегти
+        </Button>
+        <Button variant="ghost" onClick={onClose} disabled={pending}>
+          Скасувати
+        </Button>
       </div>
-    </div>
+    </Dialog>
   );
 }

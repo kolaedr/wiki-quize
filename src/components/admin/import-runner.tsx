@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Check, Circle, Loader2, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,8 @@ export function ImportRunner({
   label?: string;
 }) {
   const router = useRouter();
-  const [view, setView] = useState<JobView | null>(null);
+  // what the user's own actions produced; null until they start/step a job
+  const [override, setOverride] = useState<JobView | null>(null);
   const [running, setRunning] = useState(false);
   const [starting, setStarting] = useState(false);
   const [n, setN] = useState(1);
@@ -47,7 +49,7 @@ export function ImportRunner({
           setErr(s.message ?? "не вдалося створити джоб");
           return;
         }
-        setView(await getJobAction(s.jobId));
+        setOverride(await getJobAction(s.jobId));
       } finally {
         setStarting(false);
       }
@@ -55,38 +57,34 @@ export function ImportRunner({
     [topicSlug],
   );
 
+  // The newest job for this dataset, so the queue (with its ticked-off batches)
+  // is on screen the moment the tab opens instead of a bare button. As a query
+  // it also survives tab switches from cache rather than refetching.
+  const { data: latest, isLoading: loadingLatest } = useQuery({
+    queryKey: ["admin", "job", "latest", topicSlug],
+    queryFn: () => getLatestJobAction(topicSlug),
+  });
+
+  /**
+   * What's on screen: the user's own job wins, otherwise the last one from the
+   * DB — a finished run stays visible (read-only) with ↻ to start a new one.
+   * DERIVED, not copied into state by an effect: mirroring a query into
+   * useState is the cascading-render pattern, and it also made the queue flash
+   * empty for a frame on every tab switch.
+   */
+  const view = override ?? latest ?? null;
+
+  // The only real side effect left: dataset setup wants a fresh import started
+  // for it. Runs once, and never on top of a queue that's still going.
   useEffect(() => {
-    if (created.current) return;
-    let cancelled = false;
-    (async () => {
-      // on mount, pull the newest job from the DB so the queue shows up as soon
-      // as the tab opens (with its ticked-off batches) instead of a bare button
-      const latest = await getLatestJobAction(topicSlug);
-      if (cancelled || created.current) return;
-      // an in-progress queue always resumes (running or mid-finalize)
-      if (latest && !latest.done) {
-        created.current = true;
-        setView(latest);
-        return;
-      }
-      // autoStart (dataset setup) kicks a fresh import even if an old one finished
-      if (autoStart) {
-        created.current = true;
-        createJob();
-        return;
-      }
-      // otherwise (e.g. the Sync tab) show the LAST queue, done or not — so a
-      // finished run stays visible (read-only) with ↻ to start a new one
-      if (latest) {
-        created.current = true;
-        setView(latest);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, topicSlug]);
+    if (created.current || loadingLatest || !autoStart) return;
+    if (latest && !latest.done) return; // resume that one instead
+    created.current = true;
+    // starting a job IS a side effect, which is what effects are for; the rule
+    // only fires because createJob flips its own pending flag on the way out
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot kick-off
+    createJob();
+  }, [loadingLatest, latest, autoStart, createJob]);
 
   const runBatches = async (count: number) => {
     if (!view || running || view.done) return;
@@ -94,7 +92,7 @@ export function ImportRunner({
     let v = view;
     for (let i = 0; i < count && !v.done; i++) {
       v = await importTickAction(v.jobId);
-      setView(v);
+      setOverride(v);
       if (v.error) break; // a batch failed — stop; the admin can retry it
     }
     setRunning(false);
@@ -103,7 +101,7 @@ export function ImportRunner({
 
   const jumpTo = async (i: number) => {
     if (!view || running) return;
-    setView(await setJobStartAction(view.jobId, i));
+    setOverride(await setJobStartAction(view.jobId, i));
   };
 
   if (!view)

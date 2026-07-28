@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ImageIcon, Loader2, X } from "lucide-react";
+import { ImageIcon, Loader2 } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { GameItemImage } from "@/lib/admin/actions";
 
@@ -78,21 +79,12 @@ export function ItemImagePicker({
       </div>
       {hint && <p className="text-[11px] text-muted">{hint}</p>}
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="flex max-h-[85vh] w-full max-w-lg flex-col gap-3 rounded-2xl border border-line bg-bg p-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="font-display font-bold">Оберіть зображення</h3>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Закрити">
-                <X size={18} className="text-muted hover:text-fg" />
-              </button>
-            </div>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Оберіть зображення"
+        className="max-h-[85vh] max-w-lg overflow-y-auto"
+      >
             {loading && (
               <div className="flex justify-center p-6">
                 <Loader2 size={22} className="animate-spin text-accent" />
@@ -118,9 +110,7 @@ export function ItemImagePicker({
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
+      </Dialog>
     </div>
   );
 }

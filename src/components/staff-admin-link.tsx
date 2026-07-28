@@ -3,24 +3,18 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Shield } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { StaffLevel } from "@/lib/admin/guard";
+import { useQuery } from "@tanstack/react-query";
 import { getMyStaffLevel } from "@/lib/admin/staff-action";
 import { useSession } from "@/lib/auth-client";
 
 function StaffAdminLinkInner({ userId }: { userId: string }) {
   const t = useTranslations("footer");
-  const [level, setLevel] = useState<StaffLevel | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getMyStaffLevel().then((next) => {
-      if (!cancelled) setLevel(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+  // keyed by user so switching accounts can't show the previous one's level;
+  // cached, so the check doesn't re-run on every navigation
+  const { data: level } = useQuery({
+    queryKey: ["staff", "level", userId],
+    queryFn: () => getMyStaffLevel(),
+  });
 
   if (!level) return null;
 

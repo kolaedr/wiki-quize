@@ -23,6 +23,9 @@ const buttonVariants = cva(
         sm: "h-8 px-3 text-xs",
         lg: "h-12 px-7",
         icon: "h-10 w-10",
+        /** round icon button — the game chrome (back, layout, sound) */
+        iconRound: "h-10 w-10 rounded-full",
+        iconRoundSm: "h-8 w-8 rounded-full",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

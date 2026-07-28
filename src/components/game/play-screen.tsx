@@ -9,6 +9,8 @@ import { useGame } from "@/stores/game";
 import { useProgress } from "@/stores/progress";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
 import { useGameScrollLock } from "@/lib/use-scroll-lock";
+import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import { Toaster } from "@/components/toaster";
 import { GameBoard } from "./game-board";
 import { GameConfigPanel } from "./game-config-panel";
@@ -161,31 +163,27 @@ export function PlayScreen({
       {/* one slim row: back · lives · layout. Two round buttons at the edges,
           the hearts centred in the space they leave. */}
       <div className="mx-auto flex w-full max-w-lg items-center gap-3 px-5 pt-1 pb-6">
-        <Link
-          href={backHref}
-          aria-label={t("game.back")}
-          title={t("game.back")}
-          className="glass-card flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-fg"
-        >
-          <ArrowLeft size={18} />
-        </Link>
+        <Button asChild variant="glass" size="iconRound" className="shrink-0 text-muted hover:text-fg">
+          <Link href={backHref} aria-label={t("game.back")} title={t("game.back")}>
+            <ArrowLeft size={18} />
+          </Link>
+        </Button>
         <span className="flex flex-1 items-center justify-center">
           {maxLives > 0 && <Lives lives={lives} maxLives={maxLives} />}
         </span>
 
         {showLayoutSwitch ? (
-          <button
-            type="button"
-            onClick={() => setConfigOpen((o) => !o)}
+          <Toggle
+            pressed={configOpen}
+            onPressedChange={setConfigOpen}
+            size="icon"
             aria-label={t("settings.layout")}
             aria-expanded={configOpen}
             title={t("settings.layout")}
-            className={`glass-card flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
-              configOpen ? "border-accent text-accent" : "text-accent hover:text-fg"
-            }`}
+            className={configOpen ? "" : "text-accent hover:text-fg"}
           >
             <LayoutIcon layout={active} />
-          </button>
+          </Toggle>
         ) : (
           // keeps the hearts centred when there's nothing to switch
           <span className="h-10 w-10 shrink-0" aria-hidden />
