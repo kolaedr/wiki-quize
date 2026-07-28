@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, ExternalLink, ImageOff, X } from "lucide-react";
+import { Eye, ExternalLink, ImageOff } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
 
 interface FieldDef {
   role: string;
@@ -31,31 +32,24 @@ export function ItemPreview({ entity, fields }: { entity: Entity; fields: FieldD
         <Eye size={15} />
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="glass-card flex max-h-[85vh] w-full max-w-md flex-col gap-3 overflow-y-auto p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-display text-lg font-bold">{entity.label}</h3>
-                <a
-                  href={`https://www.wikidata.org/wiki/${entity.qid}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-[11px] text-muted hover:text-accent"
-                >
-                  {entity.qid} <ExternalLink size={10} />
-                </a>
-              </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Закрити">
-                <X size={18} className="text-muted hover:text-fg" />
-              </button>
-            </div>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        className="max-h-[85vh] max-w-md overflow-y-auto"
+        title={
+          <span className="flex flex-col">
+            {entity.label}
+            <a
+              href={`https://www.wikidata.org/wiki/${entity.qid}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-[11px] font-normal text-muted hover:text-accent"
+            >
+              {entity.qid} <ExternalLink size={10} />
+            </a>
+          </span>
+        }
+      >
 
             {entity.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- Commons preview
@@ -111,9 +105,7 @@ export function ItemPreview({ entity, fields }: { entity: Entity; fields: FieldD
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
+      </Dialog>
     </>
   );
 }

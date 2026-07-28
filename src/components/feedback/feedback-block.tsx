@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Check, Loader2, MessageSquarePlus, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { newCaptchaAction, submitFeedbackAction } from "@/lib/feedback/actions";
 
 const KINDS = [
@@ -119,14 +120,13 @@ export function FeedbackBlock() {
             ))}
           </div>
 
-          <textarea
+          <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={2}
             maxLength={1000}
             autoFocus
             placeholder={kind === "topic_request" ? t("placeholderTopic") : t("placeholderOther")}
-            className="w-full resize-y rounded-xl border border-line/60 bg-transparent p-3 text-sm outline-none focus:border-accent"
           />
 
           <Input
@@ -136,7 +136,9 @@ export function FeedbackBlock() {
             placeholder={t("contact")}
           />
 
-          {/* honeypot — visually hidden, must stay empty */}
+          {/* honeypot — visually hidden, must stay empty. Deliberately a RAW
+              input: it must not inherit the styled Input's chrome, and bots
+              should see a perfectly ordinary field. */}
           <input
             type="text"
             tabIndex={-1}

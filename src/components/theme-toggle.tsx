@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Sun, Moon, MonitorSmartphone } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 
 /** Click cycles: system → light → dark → system. Icon shows the current mode. */
@@ -27,15 +28,15 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const Icon = ICONS[current];
 
   return (
-    <button
+    <Button
+      variant="glass"
+      size={compact ? "iconRoundSm" : "iconRound"}
       onClick={() => setTheme(next)}
       title={`${t(current)} → ${t(next)}`}
       aria-label={t(current)}
-      className={`glass-card flex items-center justify-center text-muted transition-colors hover:text-accent active:scale-95 ${
-        compact ? "h-6 w-6 rounded-lg" : "h-10 w-10"
-      }`}
+      className={compact ? "rounded-lg text-muted hover:text-accent" : "text-muted hover:text-accent"}
     >
       <Icon size={compact ? 14 : 18} />
-    </button>
+    </Button>
   );
 }

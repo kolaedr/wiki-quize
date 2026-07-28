@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Volume2, VolumeX } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 import { useSettings } from "@/stores/settings";
 import { playAnswer } from "@/lib/sound";
 
@@ -34,22 +35,20 @@ export function SoundToggle({
   const on = mounted && sound;
 
   return (
-    <button
-      type="button"
-      onClick={() => {
+    <Toggle
+      pressed={on}
+      size={compact ? "iconSm" : "icon"}
+      onPressedChange={() => {
         toggleSound();
         // turning it ON plays a sample, so you hear what you just enabled —
         // and the click doubles as the gesture that unlocks the audio context
         if (!sound) playAnswer(true);
       }}
-      aria-pressed={on}
       aria-label={t("sound")}
       title={on ? t("soundOn") : t("soundOff")}
-      className={`glass-card flex shrink-0 items-center justify-center transition-colors ${
-        compact ? "h-6 w-6 rounded-lg" : "h-10 w-10 rounded-full"
-      } ${on ? "text-accent" : "text-muted"} hover:text-fg ${className}`}
+      className={className}
     >
       {on ? <Volume2 size={compact ? 14 : 17} /> : <VolumeX size={compact ? 14 : 17} />}
-    </button>
+    </Toggle>
   );
 }

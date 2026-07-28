@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil, Save, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,6 @@ import {
   setGameCoverAction,
   setGameIconAction,
   setGameVisualAction,
-  type CoverageResult,
 } from "@/lib/admin/actions";
 import { GameIcon, ICON_NAMES } from "@/components/game-icon";
 
@@ -92,7 +92,7 @@ export function GameEditor({
   const [oShow, setOShow] = useState<string>(optionShowInit);
   const [blur, setBlur] = useState<number>(promptBlur ?? 0);
   const [stackDef, setStackDef] = useState<boolean>(!!stackedDefault);
-  const [cov, setCov] = useState<CoverageResult | null>(null);
+  const queryClient = useQueryClient();
 
   const isRefChoice = mechanic === "choice" && !!refRole;
   const isOwnChoice = mechanic === "choice" && !refRole;
@@ -102,9 +102,13 @@ export function GameEditor({
 
   const projectedLevels = Math.max(1, Math.ceil((itemsCount || per) / Math.max(2, per)));
 
-  useEffect(() => {
-    if (open && hasVisual && !cov) getGameCoverageAction(gameId).then(setCov);
-  }, [open, hasVisual, cov, gameId]);
+  // asset coverage for this game — fetched once the editor is open, cached by
+  // game id, and invalidated (not manually refetched) after a visual save
+  const { data: cov } = useQuery({
+    queryKey: ["admin", "game", gameId, "coverage"],
+    queryFn: () => getGameCoverageAction(gameId),
+    enabled: open && hasVisual,
+  });
 
   const save = () =>
     start(async () => {
@@ -152,8 +156,7 @@ export function GameEditor({
       }
       const r = await setGameVisualAction(gameId, patch);
       setMsg(r.message);
-      setCov(null);
-      getGameCoverageAction(gameId).then(setCov);
+      queryClient.invalidateQueries({ queryKey: ["admin", "game", gameId, "coverage"] });
     });
 
   const del = () => {

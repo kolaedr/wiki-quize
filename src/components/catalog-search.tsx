@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useDebounced } from "@/lib/use-debounced";
 
 /** Wait this long after the last keystroke before re-querying. */
 const DEBOUNCE_MS = 320;
@@ -43,11 +44,12 @@ export function CatalogSearch({
     });
   };
 
+  // one shared debounce hook instead of a local timer in every search box
+  const debounced = useDebounced(text, DEBOUNCE_MS);
   useEffect(() => {
-    const id = setTimeout(() => go(text), DEBOUNCE_MS);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `go` is stable enough; only the text drives it
-  }, [text]);
+    go(debounced);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the settled value drives navigation
+  }, [debounced]);
 
   return (
     <div className="flex items-center gap-2">

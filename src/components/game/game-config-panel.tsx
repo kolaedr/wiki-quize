@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { AnimatePresence, motion } from "motion/react";
 import { Columns2, LayoutGrid, Rows3, Square, Swords } from "lucide-react";
+import { Toggle, ToggleGroup } from "@/components/ui/toggle";
 import { useSettings, type ChoiceLayout } from "@/stores/settings";
 
 const LAYOUT_ICON = { single: Square, duel: Swords, quad: LayoutGrid } as const;
@@ -52,58 +53,39 @@ export function GameConfigPanel({
         >
           <div className="mx-auto flex w-full max-w-lg flex-col gap-2 px-5 pb-3">
             {/* row 1 — the modes, each taking an equal share */}
-            <div role="radiogroup" aria-label={t("layout")} className="flex items-stretch gap-2">
-              {available.map((l) => {
+            <ToggleGroup
+              label={t("layout")}
+              size="stack"
+              value={active}
+              onChange={onPick}
+              options={available.map((l) => {
                 const Icon = LAYOUT_ICON[l];
-                const on = active === l;
-                return (
-                  <button
-                    key={l}
-                    role="radio"
-                    aria-checked={on}
-                    onClick={() => onPick(l)}
-                    className={`glass-card flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition-colors ${
-                      on ? "border-accent text-accent" : "text-muted hover:text-fg"
-                    }`}
-                  >
-                    <Icon size={17} />
-                    {t(`layoutName_${l}`)}
-                  </button>
-                );
+                return { value: l, icon: <Icon size={17} />, label: t(`layoutName_${l}`) };
               })}
-            </div>
+            />
 
             {/* row 2 — how many cards, and how they sit */}
             {showCardOpts && (
               <div className="flex items-stretch gap-2">
-                {([2, 3] as const).map((n) => {
-                  const on = duelCount === n;
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => setDuelCount(n)}
-                      className={`glass-card flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors ${
-                        on ? "border-accent text-accent" : "text-muted hover:text-fg"
-                      }`}
-                    >
-                      {t("cards", { count: n })}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  aria-pressed={isStacked}
-                  onClick={() => setStacked(!isStacked)}
+                {([2, 3] as const).map((n) => (
+                  <Toggle
+                    key={n}
+                    pressed={duelCount === n}
+                    onPressedChange={() => setDuelCount(n)}
+                    className="flex-1 py-2 text-[11px]"
+                  >
+                    {t("cards", { count: n })}
+                  </Toggle>
+                ))}
+                <Toggle
+                  pressed={isStacked}
+                  onPressedChange={setStacked}
                   title={t("stacked")}
-                  className={`glass-card flex flex-1 items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-colors ${
-                    isStacked ? "border-accent text-accent" : "text-muted hover:text-fg"
-                  }`}
+                  className="flex-1 py-2 text-[11px]"
                 >
                   {isStacked ? <Rows3 size={15} /> : <Columns2 size={15} />}
                   {t("stacked")}
-                </button>
+                </Toggle>
               </div>
             )}
           </div>

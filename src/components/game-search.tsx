@@ -3,21 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Loader2, Search, X } from "lucide-react";
 import { GameIcon } from "@/components/game-icon";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { resolveText } from "@/i18n/locales";
 import { imageFrame } from "@/lib/image-frame";
+import { useDebounced } from "@/lib/use-debounced";
 import { searchGamesAction, type GameHit } from "@/lib/search/actions";
 
-/** Wait this long after the last keystroke before asking the server. */
 const DEBOUNCE_MS = 280;
+const MIN_CHARS = 2;
 
 /**
  * Typeahead for games on the home page.
  *
- * Debounced so a query goes out per PAUSE, not per keystroke, and every reply
- * is stamped with the query it answered — a slow request for "fla" must not
- * overwrite the results for "flags" when it finally lands.
+ * The query key is the debounced text, which does the bookkeeping the hand
+ * -rolled version needed a ref and three useStates for: repeated queries come
+ * from cache, in-flight duplicates are deduped, and a slow reply for "fla" can
+ * no longer land on top of the results for "flags" — it belongs to a different
+ * key. `keepPreviousData` holds the old list on screen while the next one
+ * loads, so the dropdown doesn't blink empty between keystrokes.
  */
 export function GameSearch() {
   const t = useTranslations("home");
@@ -25,58 +32,38 @@ export function GameSearch() {
   const router = useRouter();
 
   const [text, setText] = useState("");
-  const [hits, setHits] = useState<GameHit[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(-1);
   const boxRef = useRef<HTMLDivElement>(null);
-  const latest = useRef("");
 
-  // The spinner is switched on by the KEYSTROKE, not by this effect: setting
-  // state synchronously inside an effect body just to mirror an input is the
-  // cascading-render pattern React warns about. The effect only owns the timer.
-  const onChange = (value: string) => {
-    setText(value);
-    const q = value.trim();
-    if (q.length < 2) {
-      setHits(null);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-  };
+  const q = useDebounced(text.trim(), DEBOUNCE_MS);
+  const enabled = q.length >= MIN_CHARS; // one letter matches nearly everything
+
+  const { data: hits = [], isFetching } = useQuery({
+    queryKey: ["games", "search", q],
+    queryFn: () => searchGamesAction(q),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
 
   useEffect(() => {
-    const q = text.trim();
-    latest.current = q;
-    if (q.length < 2) return;
-    const id = setTimeout(async () => {
-      const res = await searchGamesAction(q);
-      if (latest.current !== q) return; // a newer query already went out
-      setHits(res);
-      setCursor(-1);
-      setLoading(false);
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(id);
-  }, [text]);
-
-  // click outside closes the suggestions
-  useEffect(() => {
-    if (!hits) return;
+    if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setHits(null);
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [hits]);
+  }, [open]);
 
   const go = (slug: string) => {
-    setHits(null);
-    onChange("");
+    setOpen(false);
+    setText("");
     router.push(`/play/${slug}`);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (!hits || hits.length === 0) return;
+    if (e.key === "Escape") return setOpen(false);
+    if (!open || hits.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setCursor((c) => (c + 1) % hits.length);
@@ -86,42 +73,63 @@ export function GameSearch() {
     } else if (e.key === "Enter") {
       e.preventDefault();
       go(hits[cursor >= 0 ? cursor : 0].slug);
-    } else if (e.key === "Escape") {
-      setHits(null);
     }
   };
 
+  const showList = open && enabled;
+  const busy = enabled && isFetching;
+
   return (
     <div ref={boxRef} className="relative">
-      <div className="glass-card flex items-center gap-2 px-3 py-2">
-        <Search size={16} className="shrink-0 text-muted" />
-        <input
+      <div className="relative">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+        />
+        <Input
           value={text}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setText(v);
+            // opened by the KEYSTROKE, not by an effect mirroring the input
+            setOpen(v.trim().length >= MIN_CHARS);
+          }}
           onKeyDown={onKeyDown}
           placeholder={t("searchGames")}
           aria-label={t("searchGames")}
-          className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted"
+          className="h-12 pl-9 pr-9"
         />
-        {loading && <Loader2 size={14} className="shrink-0 animate-spin text-muted" />}
-        {!loading && text && (
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            aria-label={t("searchClear")}
-            className="shrink-0 text-muted transition-colors hover:text-fg"
-          >
-            <X size={15} />
-          </button>
+        {busy ? (
+          <Loader2
+            size={15}
+            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted"
+          />
+        ) : (
+          text && (
+            <button
+              type="button"
+              onClick={() => {
+                setText("");
+                setOpen(false);
+              }}
+              aria-label={t("searchClear")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted transition-colors hover:text-fg"
+            >
+              <X size={15} />
+            </button>
+          )
         )}
       </div>
 
-      {hits && (
-        <div className="white-card absolute inset-x-0 top-full z-30 mt-2 overflow-hidden p-1 shadow-xl">
+      {showList && (
+        <Card
+          variant="white"
+          className="absolute inset-x-0 top-full z-30 mt-2 overflow-hidden p-1 shadow-xl"
+        >
           {hits.length === 0 ? (
             <p className="px-3 py-2 text-xs text-muted">{t("nothingFound")}</p>
           ) : (
-            hits.map((h, i) => (
+            hits.map((h: GameHit, i: number) => (
               <button
                 key={h.slug}
                 type="button"
@@ -141,13 +149,11 @@ export function GameSearch() {
                 ) : (
                   <GameIcon name={h.icon} size={16} className="h-8 w-10 shrink-0" />
                 )}
-                <span className="truncate text-sm font-medium">
-                  {resolveText(h.title, locale)}
-                </span>
+                <span className="truncate text-sm font-medium">{resolveText(h.title, locale)}</span>
               </button>
             ))
           )}
-        </div>
+        </Card>
       )}
     </div>
   );
