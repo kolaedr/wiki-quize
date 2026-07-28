@@ -14,7 +14,7 @@
  *    a running game, and the page can offer an explicit "update" prompt. The
  *    client asks for the swap by posting SKIP_WAITING.
  */
-const VERSION = "wq-v3";
+const VERSION = "wq-v4"; // v4: new app icon
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGES_CACHE = `${VERSION}-pages`;
 
@@ -22,7 +22,7 @@ const PAGES_CACHE = `${VERSION}-pages`;
 const SHELL = ["/", "/icon.svg", "/icon-192.png", "/manifest.webmanifest"];
 
 const STATIC_RE =
-  /\/(_next\/static|icon\.svg|icon-\d+\.png|favicon-32\.png|apple-touch-icon\.png|manifest\.webmanifest)/;
+  /\/(_next\/static|icon\.svg|icon(-maskable)?-\d+\.png|og-\d+\.png|favicon-32\.png|apple-touch-icon\.png|manifest\.webmanifest)/;
 
 /** Never cache: personal pages, admin, and anything under /api. */
 const NO_CACHE_RE = /^\/(api|admin|me|auth)(\/|$)/;

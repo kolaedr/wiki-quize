@@ -1,27 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Full-bleed (no rounded outer corners — OS mask handles that). No <text>. -->
-  <defs>
-    <linearGradient id="g" x1="80" y1="80" x2="432" y2="432" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#9b7bff"/>
-      <stop offset="1" stop-color="#2dd4bf"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" fill="#0a0913"/>
-  <!-- Back card -->
-  <g transform="rotate(-10 256 256)">
-    <rect x="146" y="108" width="220" height="296" rx="32" fill="none" stroke="url(#g)" stroke-width="18" opacity="0.5"/>
-  </g>
-  <!-- Front card -->
-  <g transform="rotate(7 256 256)">
-    <rect x="156" y="118" width="220" height="296" rx="32" fill="#14111f" stroke="url(#g)" stroke-width="18"/>
-  </g>
-  <!-- Bold ? mark — readable at favicon size -->
-  <path
-    fill="none"
-    stroke="url(#g)"
-    stroke-width="36"
-    stroke-linecap="round"
-    d="M208 200c0-44 36-72 72-72s72 28 72 68c0 36-24 52-48 66-20 12-32 24-32 52"
-  />
-  <circle cx="272" cy="348" r="18" fill="url(#g)"/>
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M28.002 36.3153V182.987H21.47C21.47 182.987 17.9072 182.987 13.7505 178.236C9.59381 173.486 9 169.329 9 169.329V23.2515C9 23.2515 10.1876 17.3133 14.3443 13.1567C18.501 9.00001 28.002 9 28.002 9H117.074C117.074 9 120.043 9 120.043 12.5629C120.043 16.1257 117.074 16.1257 117.074 16.1257H28.002C28.002 16.1257 18.501 15.5319 17.9072 26.2205C17.3134 36.9091 28.002 36.3153 28.002 36.3153Z" fill="#6D4AFF"/>
+<path d="M49.3792 118.855L79.0697 36.3154H28.002V182.987H61.2554L79.0697 118.855H49.3792Z" fill="#9177FF"/>
+<path d="M130.731 88.5707L68.9749 182.987L87.9769 111.729H60.0678L86.1954 35.7215H126.575L99.8531 88.5707H130.731Z" fill="#F2B347"/>
+<path d="M116.48 29.1896L114.105 23.2515H28.5958C28.5958 23.2515 26.8142 23.2515 26.8142 26.2205C26.8142 29.1896 28.5958 29.1896 28.5958 29.1896H116.48Z" fill="#F2B347"/>
+<path d="M115.292 182.987L101.635 146.17L119.449 119.449L130.137 148.546L159.234 64.8183H187.143L144.983 182.987H115.292Z" fill="#6D4AFF"/>
 </svg>
