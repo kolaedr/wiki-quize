@@ -24,8 +24,17 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/png",
         purpose: "any",
       },
+      // MASKABLE is a separate artwork, not the same file with another label:
+      // Android crops these to the launcher's shape and only guarantees the
+      // middle 80%, so the logo is pre-padded into that safe zone.
       {
-        src: "/icon-512.png",
+        src: "/icon-maskable-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/icon-maskable-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

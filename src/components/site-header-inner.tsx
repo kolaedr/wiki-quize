@@ -21,11 +21,17 @@ export function SiteHeaderInner() {
 
   return (
     <header className="mx-auto flex w-full max-w-4xl shrink-0 items-center justify-between px-5 pb-1 pt-4">
-      <Link href="/" className="flex min-w-0 flex-col leading-none transition-colors hover:text-accent">
-        <span className="font-display text-lg font-semibold tracking-tight">WiQus</span>
-        {gameTitle && (
-          <span className="truncate text-[11px] font-medium text-muted">{gameTitle}</span>
-        )}
+      <Link href="/" className="flex min-w-0 items-center gap-2 transition-colors hover:text-accent">
+        {/* the app icon itself — SVG, so it stays crisp and needs no dark-mode
+            variant (the artwork carries its own colours) */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG */}
+        <img src="/icon.svg" alt="" width={28} height={28} className="shrink-0" />
+        <span className="flex min-w-0 flex-col leading-none">
+          <span className="font-display text-lg font-semibold tracking-tight">WiQus</span>
+          {gameTitle && (
+            <span className="truncate text-[11px] font-medium text-muted">{gameTitle}</span>
+          )}
+        </span>
       </Link>
       <div className="flex items-center gap-2">
         <StaffAdminLink />

@@ -25,20 +25,26 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: t("name"),
     manifest: "/manifest.webmanifest",
     icons: {
+      // SVG first: browsers that understand it get one crisp file at every
+      // density, transparent background included. The PNGs stay as the
+      // fallback for the ones that don't (and for tools that scrape a favicon).
       icon: [
+        { url: "/icon.svg", type: "image/svg+xml" },
         { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
         { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       ],
       apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
     },
-    // link previews in messengers / social (og:image pulls the app icon)
+    // Link previews. OpenGraph gets the wide banner — messengers and Facebook
+    // crop a square one into a strip; Twitter's `summary` card is square by
+    // definition, so it keeps the icon.
     openGraph: {
       type: "website",
       siteName: t("name"),
       title: t("name"),
       description: t("description"),
       url: "/",
-      images: [{ url: "/icon-512.png", width: 512, height: 512, alt: t("name") }],
+      images: [{ url: "/og-1200.png", width: 1200, height: 630, alt: t("name") }],
     },
     twitter: {
       card: "summary",
